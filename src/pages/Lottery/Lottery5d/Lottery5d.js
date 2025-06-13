@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 import { Link } from "react-router-dom";
@@ -15,7 +14,6 @@ import LotteryWingoheader from "../../../components/LotteryWingoheader";
 import walletbggame from "../../../Assets/walletbggame.png";
 import agree from "./../../../Assets/agree-a.png";
 import notAgree from "./../../../Assets/agree-b.png";
-import gameApi from "../../../api/gameAPI";
 import { getWalletBalance } from "../../../api/apiServices";
 import useSocket from "../../../hooks/useSocket";
 
@@ -37,15 +35,17 @@ const tailwindColorMap = {
 function Lottery5d() {
   const isMounted = useRef(true);
   const gameType = "fiveD";
+  const lastFetchedPeriodRef = useRef(null);
   const [activeTab, setActiveTab] = useState("gameHistory");
   const [activeImgTab, setActiveImgTab] = useState("A");
   const [historyData, setHistoryData] = useState([]);
+  const [userBets, setUserBets] = useState([]);
   const [activeButton, setActiveButton] = useState(buttonData[0].id);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
-  const [betType, setBetType] = useState(null); // number or size
+  const [betType, setBetType] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [walletBalance, setWalletBalance] = useState(0.0);
   const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
@@ -62,17 +62,190 @@ function Lottery5d() {
   const multiplierOptions = ["X1", "X5", "X10", "X20", "X50", "X100"];
   const API_BASE_URL = "https://strike.atsproduct.in";
 
-  // WebSocket hook
   const {
     isConnected,
     connectionError,
     currentPeriod: socketPeriod,
     timeRemaining: socketTime,
-    gameHistory: socketHistory,
+    lastResult,
     placeBet,
   } = useSocket(gameType, buttonData[activeButton].duration);
 
-  // Wallet balance fetching
+  const handleRefreshBalance = useCallback(async () => {
+    if (isRefreshingBalance) return;
+    setIsRefreshingBalance(true);
+    try {
+      const response = await getWalletBalance();
+      if (response?.success && response?.mainWallet) {
+        const balance = Number(response.mainWallet.balance) || 0;
+        setWalletBalance(balance);
+      } else {
+        setError("Failed to refresh balance");
+      }
+    } catch (error) {
+      setError("Failed to refresh balance. Please try again.");
+    } finally {
+      setIsRefreshingBalance(false);
+    }
+  }, [isRefreshingBalance]);
+
+  const fetchGameHistory = useCallback(async (page = 1, duration, retryCount = 0) => {
+    if (!isMounted.current) return { results: [], pagination: { total_pages: 1 } };
+
+    console.log("🔄 Fetching game history...", { page, duration, retryCount });
+    setLoading(true);
+    setError(null);
+
+    try {
+      const accessToken = localStorage.getItem("token");
+      if (!accessToken) {
+        throw new Error("No access token found. Please log in.");
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/games/5D/${duration}/history?page=${page}&limit=10`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("📥 Game history API response:", data);
+
+      let results = [];
+      if (data.success && data.data) {
+        const dataArray = data.data.results || (Array.isArray(data.data) ? data.data : []);
+        results = dataArray.map((item) => ({
+          periodId: item.periodId || "N/A",
+          result: item.result || { A: 0, B: 0, C: 0, D: 0, E: 0, sum: 0 },
+          timestamp: item.timestamp || new Date().toISOString(),
+        }));
+      }
+
+      if (isMounted.current) {
+        setHistoryData((prev) => {
+          // Merge new results, avoiding duplicates
+          const newResults = results.filter(
+            (newItem) => !prev.some((oldItem) => oldItem.periodId === newItem.periodId)
+          );
+          return [...newResults, ...prev].slice(0, 10); // Keep latest 10
+        });
+        setTotalPages(data.data?.pagination?.total_pages || 1);
+        lastFetchedPeriodRef.current = results[0]?.periodId || null;
+        console.log("✅ Game history updated:", results);
+      }
+
+      return {
+        results,
+        pagination: data.data?.pagination || { total_pages: 1 },
+      };
+    } catch (err) {
+      console.error(`❌ Error fetching game history (attempt ${retryCount + 1}/3):`, err);
+      if (retryCount < 2) {
+        console.log(`🔄 Retrying game history fetch (attempt ${retryCount + 2}/3)`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchGameHistory(page, duration, retryCount + 1);
+      } else {
+        if (isMounted.current) {
+          setError(err.message || "Error fetching game history.");
+        }
+        return { results: [], pagination: { total_pages: 1 } };
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const fetchUserBets = useCallback(async (page = 1, retryCount = 0) => {
+    if (!isMounted.current) return;
+
+    console.log("🔄 Fetching user bets...", { page, retryCount });
+    setLoading(true);
+    setError(null);
+
+    try {
+      const accessToken = localStorage.getItem("token");
+      if (!accessToken) {
+        throw new Error("No access token found. Please log in.");
+      }
+
+      const duration = buttonData[activeButton].duration;
+      const response = await fetch(
+        `${API_BASE_URL}/api/games/5D/${duration}/user-bets?page=${page}&limit=10`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("📥 User bets API response:", data);
+
+      if (data.success && data.data?.results) {
+        const formattedBets = data.data.results.map((bet, index) => ({
+          betId: bet.betId || `bet-${index}`,
+          period: bet.periodId || "N/A",
+          orderTime: bet.createdAt ? new Date(bet.createdAt).toLocaleString() : new Date().toLocaleString(),
+          orderNumber: bet.betId || `ORD-${Date.now()}-${index}`,
+          amount: `₹${bet.betAmount || 0}`,
+          quantity: bet.quantity || 1,
+          afterTax: `₹${((bet.betAmount || 0) * 0.98).toFixed(2)}`,
+          tax: `₹${((bet.betAmount || 0) * 0.02).toFixed(2)}`,
+          result: bet.result ? `${bet.result.A || 0}, ${bet.result.B || 0}, ${bet.result.C || 0}, ${bet.result.D || 0}, ${bet.result.E || 0}` : "Pending",
+          select: bet.betType && bet.betValue ? `${bet.betType}: ${bet.betValue}` : "N/A",
+          status: bet.status || (bet.profitLoss > 0 ? "Won" : bet.profitLoss < 0 ? "Lost" : "Pending"),
+          winLose: bet.profitLoss !== undefined ? (bet.profitLoss >= 0 ? `+₹${bet.profitLoss}` : `-₹${Math.abs(bet.profitLoss)}`) : "₹0",
+          date: bet.createdAt ? new Date(bet.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+          time: bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString() : new Date().toLocaleTimeString(),
+        }));
+
+        if (isMounted.current) {
+          setUserBets(formattedBets);
+          setTotalPages(data.data.pagination?.total_pages || 1);
+          console.log("✅ User bets fetched successfully:", formattedBets);
+        }
+      } else {
+        if (isMounted.current) {
+          setUserBets([]);
+          setTotalPages(1);
+          setError("No valid user bet data received");
+        }
+      }
+    } catch (err) {
+      console.error("❌ Error fetching user bets:", err);
+      if (retryCount < 2) {
+        console.log(`🔄 Retrying user bets fetch (attempt ${retryCount + 2}/3)`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchUserBets(page, retryCount + 1);
+      } else {
+        if (isMounted.current) {
+          setError(err.message || "Error fetching user bets.");
+        }
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  }, [activeButton]);
+
   useEffect(() => {
     const fetchWalletBalance = async () => {
       try {
@@ -94,32 +267,14 @@ function Lottery5d() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleRefreshBalance = async () => {
-    if (isRefreshingBalance) return;
-    setIsRefreshingBalance(true);
-    try {
-      const response = await getWalletBalance();
-      if (response?.success && response?.mainWallet) {
-        const balance = Number(response.mainWallet.balance) || 0;
-        setWalletBalance(balance);
-      } else {
-        setError("Failed to refresh balance");
-      }
-    } catch (error) {
-      setError("Failed to refresh balance. Please try again.");
-    } finally {
-      setIsRefreshingBalance(false);
-    }
-  };
-
-  // WebSocket data handling
   useEffect(() => {
     if (isConnected && socketPeriod) {
+      console.log("📡 WebSocket period update:", socketPeriod);
       if (socketPeriod.periodId && socketPeriod.periodId !== "Loading...") {
         setIsPeriodTransitioning(true);
         setCurrentPeriod(socketPeriod);
         setTimeout(() => setIsPeriodTransitioning(false), 100);
-      } else if (socketPeriod.periodId === "Loading...") {
+      } else {
         setCurrentPeriod({ periodId: "Loading..." });
         setIsPeriodTransitioning(true);
       }
@@ -128,33 +283,96 @@ function Lottery5d() {
 
   useEffect(() => {
     if (isConnected && socketTime) {
+      console.log("⏰ WebSocket time update:", socketTime);
       setTimeRemaining(socketTime);
     }
   }, [isConnected, socketTime]);
 
   useEffect(() => {
+    if (isConnected && lastResult) {
+      console.log("📊 WebSocket last result:", lastResult);
+      setHistoryData((prev) => {
+        if (prev[0]?.periodId === lastResult.periodId) {
+          return prev;
+        }
+        return [lastResult, ...prev.slice(0, 9)];
+      });
+    }
+  }, [isConnected, lastResult]);
+
+  useEffect(() => {
+    if (activeTab === "gameHistory" || activeTab === "chart") {
+      const duration = buttonData[activeButton].duration;
+      fetchGameHistory(currentPage, duration);
+    } else if (activeTab === "myHistory") {
+      fetchUserBets(currentPage);
+    }
+  }, [activeTab, currentPage, activeButton, fetchGameHistory, fetchUserBets]);
+
+  useEffect(() => {
+    if (activeTab === "gameHistory" || activeTab === "chart") {
+      const duration = buttonData[activeButton].duration;
+      fetchGameHistory(1, duration);
+
+      const interval = setInterval(() => {
+        console.log("⏰ Periodic game history fetch triggered (every 30 seconds)");
+        fetchGameHistory(1, duration);
+        setCurrentPage(1);
+      }, 30000);
+
+      return () => {
+        console.log("🛑 Cleaning up periodic game history fetch interval");
+        clearInterval(interval);
+      };
+    }
+  }, [activeTab, activeButton, fetchGameHistory]);
+
+  useEffect(() => {
     if (timeRemaining.minutes === 0 && timeRemaining.seconds === 0) {
+      console.log("⏰ Period ended, initiating immediate update");
       setIsPeriodTransitioning(true);
       setCurrentPeriod({ periodId: "Loading..." });
-      const timer = setTimeout(() => {
+
+      const duration = buttonData[activeButton].duration;
+      const updateTimer = setTimeout(async () => {
+        console.log("🔄 Fetching new data after period end", { duration });
+
+        if (activeTab === "gameHistory" || activeTab === "chart") {
+          const { results } = await fetchGameHistory(1, duration);
+          setCurrentPage(1);
+          if (!results || results.length === 0) {
+            console.log("⚠️ No new results, retrying in 1s");
+            let retryCount = 0;
+            const maxRetries = 3;
+            while (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              const retryResults = await fetchGameHistory(1, duration);
+              if (retryResults.results && retryResults.results.length > 0) {
+                break;
+              }
+              retryCount++;
+              console.log(`🔄 Retry ${retryCount}/${maxRetries} failed, retrying...`);
+            }
+          }
+        }
+
+        if (activeTab === "myHistory") {
+          await fetchUserBets(1);
+        }
+
         if (!isConnected) {
-          const duration = buttonData[activeButton].duration;
           setTimeRemaining({
             minutes: Math.floor(duration / 60),
             seconds: duration % 60,
           });
         }
-        setTimeout(() => {
-          if (!isConnected) {
-            setIsPeriodTransitioning(false);
-          }
-        }, 1000);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [timeRemaining.minutes, timeRemaining.seconds, activeButton, isConnected]);
+        setIsPeriodTransitioning(false);
+      }, 1000); // Reduced delay to 1s for faster updates
 
-  // Auto-close success popup
+      return () => clearTimeout(updateTimer);
+    }
+  }, [timeRemaining.minutes, timeRemaining.seconds, activeButton, activeTab, isConnected, fetchGameHistory, fetchUserBets]);
+
   useEffect(() => {
     if (showSuccessPopup) {
       const timer = setTimeout(() => {
@@ -164,33 +382,6 @@ function Lottery5d() {
     }
   }, [showSuccessPopup]);
 
-  // Fetch game history
-  const fetchGameHistory = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const duration = buttonData[activeButton].duration;
-      const response = await gameApi.getGameHistory("5D", duration, currentPage, 10);
-      if (response.success && response.data?.results) {
-        setHistoryData(response.data.results);
-        setTotalPages(response.data.pagination?.total_pages || 5);
-      } else {
-        setError("Failed to load game history.");
-      }
-    } catch (err) {
-      setError(err.message || "Error fetching game history.");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeButton, currentPage]);
-
-  useEffect(() => {
-    if (activeTab === "gameHistory") {
-      fetchGameHistory();
-    }
-  }, [activeTab, fetchGameHistory]);
-
-  // Event handlers
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
@@ -204,16 +395,12 @@ function Lottery5d() {
     });
     setCurrentPeriod({ periodId: "Loading..." });
     setIsPeriodTransitioning(true);
-    setTimeout(() => {
-      if (!isConnected) {
-        setIsPeriodTransitioning(false);
-      }
-    }, 500);
+    setTimeout(() => setIsPeriodTransitioning(false), 500);
   };
 
   const handleOptionClick = (option, type) => {
     setSelectedOption(option);
-    setBetType(type); // number or size
+    setBetType(type);
     setIsModalOpen(true);
     setBetAmount(1);
     setQuantity(1);
@@ -254,7 +441,7 @@ function Lottery5d() {
       periodId: currentPeriod.periodId,
       gameType: gameType,
       duration: buttonData[activeButton].duration,
-      position: activeImgTab, // A, B, C, D, E, or SUM
+      position: activeImgTab,
     };
 
     console.log("🎯 Placing Bet:", betData);
@@ -270,7 +457,7 @@ function Lottery5d() {
       setBetAmount(1);
       setPopupMultiplier("X1");
       setShowSuccessPopup(true);
-      handleRefreshBalance(); // Refresh balance after placing bet
+      handleRefreshBalance();
     } else {
       console.log("❌ Failed to send bet to WebSocket");
       setError("Failed to place bet. Please try again.");
@@ -315,9 +502,7 @@ function Lottery5d() {
               <img
                 src={refresh}
                 alt="Refresh balance"
-                className={`w-6 h-6 absolute right-12 cursor-pointer transition-transform duration-200 ${
-                  isRefreshingBalance ? "animate-spin opacity-50" : "hover:scale-110"
-                }`}
+                className={`w-6 h-6 absolute right-12 cursor-pointer transition-transform duration-200 ${isRefreshingBalance ? "animate-spin opacity-50" : "hover:scale-110"}`}
                 onClick={handleRefreshBalance}
                 style={{ pointerEvents: isRefreshingBalance ? "none" : "auto" }}
               />
@@ -375,27 +560,27 @@ function Lottery5d() {
             <span className="mt-4">results</span>
           </div>
           <div className="flex">
-            {historyData[0]?.result ? (
+            {isPeriodTransitioning || !historyData[0]?.result ? (
+              ["-", "-", "-", "-", "-"].map((_, idx) => (
+                <div key={idx} className="flex flex-col items-center">
+                  <div className="w-10 h-10 ml-2 flex items-center justify-center rounded-full bg-[#444] text-white text-sm animate-pulse">?</div>
+                  <div className="text-[#a8a5a1] text-xs mt-1">{["A", "B", "C", "D", "E"][idx]}</div>
+                </div>
+              ))
+            ) : (
               ["A", "B", "C", "D", "E"].map((pos, idx) => (
                 <div key={idx} className="flex flex-col items-center">
                   <div className="w-10 h-10 ml-2 flex items-center justify-center rounded-full bg-[#444] text-white text-sm">{historyData[0].result[pos]}</div>
                   <div className="text-[#a8a5a1] text-xs mt-1">{pos}</div>
                 </div>
               ))
-            ) : (
-              ["5", "9", "5", "0", "7"].map((num, idx) => (
-                <div key={idx} className="flex flex-col items-center">
-                  <div className="w-10 h-10 ml-2 flex items-center justify-center rounded-full bg-[#444] text-white text-sm">{num}</div>
-                  <div className="text-[#a8a5a1] text-xs mt-1">{["A", "B", "C", "D", "E"][idx]}</div>
-                </div>
-              ))
             )}
           </div>
           <div className="text-[#a8a5a1] text-lg mx-2">=</div>
           <div className="w-10 h-10 flex items-center justify-center relative -top-1 rounded-full bg-[#d9ac4f] text-[#8f5206] text-sm">
-            {historyData[0]?.result
-              ? Object.values(historyData[0].result).reduce((acc, n) => acc + (Number(n) || 0), 0)
-              : [5, 9, 5, 0, 7].reduce((acc, n) => acc + Number(n), 0)}
+            {isPeriodTransitioning || !historyData[0]?.result
+              ? "?"
+              : Object.values(historyData[0].result).reduce((acc, n) => acc + (Number(n) || 0), 0)}
           </div>
         </div>
 
@@ -430,19 +615,21 @@ function Lottery5d() {
               <div className="absolute top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-[20px] border-t-transparent border-b-[20px] border-b-transparent border-r-[24px] border-r-[#00b971]"></div>
             </div>
             <div className="bg-[#003c26] rounded-lg w-full h-full p-1 flex space-x-1">
-              {historyData[0]?.result ? (
-                ["A", "B", "C", "D", "E"].map((pos, index) => (
+              {isPeriodTransitioning || !historyData[0]?.result ? (
+                ["-", "-", "-", "-", "-"].map((_, index) => (
                   <div key={index} className="flex-1 bg-[#727272] rounded flex flex-col items-center py-1">
                     <div className="w-10 h-3 bg-[#e1e1ec] rounded-t-none rounded-b-full"></div>
-                    <div className={`flex items-center justify-center ${index === 0 ? "bg-emerald-500 text-white" : "bg-[#e1e1ec] text-[#a8a5a1]"} rounded-full w-14 h-14 text-4xl font-bold my-1`}>{historyData[0].result[pos]}</div>
+                    <div className={`flex items-center justify-center ${index === 0 ? "bg-emerald-500 text-white" : "bg-[#e1e1ec] text-[#a8a5a1]"} rounded-full w-14 h-14 text-4xl font-bold my-1 animate-pulse`}>?</div>
                     <div className="w-10 h-3 bg-[#e1e1ec] rounded-b-none rounded-t-full"></div>
                   </div>
                 ))
               ) : (
-                [5, 9, 9, 8, 6].map((num, index) => (
+                ["A", "B", "C", "D", "E"].map((pos, index) => (
                   <div key={index} className="flex-1 bg-[#727272] rounded flex flex-col items-center py-1">
                     <div className="w-10 h-3 bg-[#e1e1ec] rounded-t-none rounded-b-full"></div>
-                    <div className={`flex items-center justify-center ${index === 0 ? "bg-emerald-500 text-white" : "bg-[#e1e1ec] text-[#a8a5a1]"} rounded-full w-14 h-14 text-4xl font-bold my-1`}>{num}</div>
+                    <div className={`flex items-center justify-center ${index === 0 ? "bg-emerald-500 text-white" : "bg-[#e1e1ec] text-[#a8a5a1]"} rounded-full w-14 h-14 text-4xl font-bold my-1`}>
+                      {historyData[0].result[pos]}
+                    </div>
                     <div className="w-10 h-3 bg-[#e1e1ec] rounded-b-none rounded-t-full"></div>
                   </div>
                 ))
@@ -466,7 +653,7 @@ function Lottery5d() {
             activeImgTab === tab && (
               <div key={tab} className="grid grid-cols-4 gap-2">
                 <div className="col-span-4 flex justify-between mt-2 space-x-1">
-                  {["Big 1.98", "Small 1.98", "Odd 1.98", "Even 1.98"].map((label) => (
+                  {["Big 2", "Small 2", "Odd 2", "Even 2"].map((label) => (
                     <button
                       key={label}
                       className={`bg-[#6f7381] text-white px-1 py-2 rounded-md hover:bg-[#d9ac4f] flex-1 text-lg`}
@@ -489,7 +676,7 @@ function Lottery5d() {
                             <div className="w-10 h-10 flex border border-[#666462] items-center justify-center text-[#666462] rounded-full text-lg font-bold">
                               {number}
                             </div>
-                            <p className="text-lg text-[#a8a5a1]">{number}</p>
+                            <p className="text-sm text-[#a8a5a1]">9x</p>
                           </div>
                         ))}
                       </div>
@@ -503,7 +690,7 @@ function Lottery5d() {
                             <div className="w-10 h-10 flex border border-[#666462] items-center justify-center text-[#666462] rounded-full text-sm font-bold">
                               {number}
                             </div>
-                            <p className="text-lg text-[#a8a5a1]">{number}</p>
+                            <p className="text-sm text-[#a8a5a1]">9x</p>
                           </div>
                         ))}
                       </div>
@@ -530,12 +717,17 @@ function Lottery5d() {
           >
             Chart
           </button>
-          <button 
-            className={`w-full px-3 py-2 text-base rounded-lg shadow text-center ${activeTab === "myHistory" ? "bg-gradient-to-r from-[#fae59f] to-[#c4933f] text-[#8f5206] font-bold" : "bg-[#333332] text-[#a8a5a1] font-normal"}`} 
-            onClick={() => setActiveTab("myHistory")}
-          >
-            My History
-          </button>
+         <button 
+  className={`w-full px-3 py-2 text-base rounded-lg shadow text-center ${
+    activeTab === "myHistory"
+      ? "bg-gradient-to-r from-[#fae59f] to-[#c4933f] text-[#8f5206] font-bold"
+      : "bg-[#333332] text-[#a8a5a1] font-normal"
+  }`}
+  onClick={() => setActiveTab("myHistory")}
+>
+  My History
+</button>
+
         </div>
 
         <div className="mb-2 rounded-lg shadow">
@@ -585,6 +777,13 @@ function Lottery5d() {
                   <div className="flex flex-col items-center justify-center">
                     <img src={empty} alt="No Data" className="w-28 h-40 object-contain" />
                     <p className="text-[#a8a5a1] text-sm mt-2">No game history available</p>
+                    <button
+                      onClick={() => fetchGameHistory(currentPage, buttonData[activeButton].duration)}
+                      className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                      disabled={loading}
+                    >
+                      {loading ? "Loading..." : "Load History"}
+                    </button>
                   </div>
                 </div>
               )}
@@ -629,11 +828,38 @@ function Lottery5d() {
           )}
 
           {activeTab === "myHistory" && (
-            <div className="text-center bg-[#4d4d4c] py-4">
-              <div className="flex flex-col items-center justify-center">
-                <img src={empty} alt="No Data" className="w-28 h-40 object-contain" />
-                <p className="text-[#a8a5a1] text-sm mt-2">No user bets available</p>
-              </div>
+            <div className="overflow-x-auto">
+              {loading ? (
+                <p className="text-white text-center py-4">Loading user bets...</p>
+              ) : userBets.length > 0 ? (
+                <table className="table-auto w-full text-left">
+                  <thead>
+                    <tr className="bg-[#3a3947] text-white">
+                      <th className="px-2 py-2 text-center text-sm">Period</th>
+                      <th className="px-2 py-2 text-center text-sm">Select</th>
+                      <th className="px-2 py-2 text-center text-sm">Amount</th>
+                      <th className="px-2 py-2 text-center text-sm">Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userBets.map((bet, index) => (
+                      <tr key={index} className="bg-[#3f3f3e]">
+                        <td className="px-2 py-2 text-sm text-[#f5f3f0]">{bet.period}</td>
+                        <td className="px-2 py-2 text-sm text-[#f5f3f0] text-center">{bet.select}</td>
+                        <td className="px-2 py-2 text-sm text-[#f5f3f0] text-center">{bet.amount}</td>
+                        <td className="px-2 py-2 text-sm text-[#f5f3f0] text-center">{bet.result}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-center bg-[#4d4d4c] py-4">
+                  <div className="flex flex-col items-center justify-center">
+                    <img src={empty} alt="No Data" className="w-28 h-40 object-contain" />
+                    <p className="text-[#a8a5a1] text-sm mt-2">No user bets available</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <div className="text-center mb-0 w-full mt-2">
@@ -660,13 +886,13 @@ function Lottery5d() {
 
       {isModalOpen && (
         <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-[60] bg-neutral-900 text-white w-full max-w-[400px] shadow-lg rounded-t-lg">
-          <div className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption]} rounded-t-xl flex flex-col items-center text-center`}>
+          <div className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]} rounded-t-lg flex flex-col items-center text-center`}>
             <h2 className="text-lg font-bold mt-2">{buttonData[activeButton].title}</h2>
             <div className="flex w-full max-w-xs items-center justify-center bg-white text-black gap-2 mt-2 p-2 rounded-lg">
               <span>Select</span>
               <span className="font-bold">{selectedOption} ({activeImgTab})</span>
             </div>
-            <div className={`relative ${tailwindColorMap[betType === "number" ? "Number" : selectedOption]} rounded-t-xl px-0 flex flex-col items-center text-center p-[14px]`}>
+            <div className={`relative ${tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]} rounded-t px-0 flex flex-col items-center text-center p-[14px]`}>
               <div className="absolute top-0 mr-0 right-0 w-0 h-0 border-t-[30px] border-l-[200px] border-r-0 border-b-0 border-solid border-transparent border-l-neutral-900"></div>
               <div className="absolute top-0 ml-0 left-0 w-0 h-0 border-t-[30px] border-r-[200px] border-l-0 border-b-0 border-solid border-transparent border-r-neutral-900"></div>
             </div>
@@ -678,7 +904,7 @@ function Lottery5d() {
                 {["1", "10", "100", "1000"].map((label) => (
                   <button
                     key={label}
-                    className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption]} px-2 py-1 rounded text-sm ${betAmount === parseInt(label) ? "ring-2 ring-white" : ""}`}
+                    className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]} px-2 py-1 rounded text-sm ${betAmount === parseInt(label) ? "ring-2 ring-white" : ""}`}
                     onClick={() => setBetAmount(parseInt(label))}
                   >
                     {label}
@@ -690,7 +916,7 @@ function Lottery5d() {
               <p className="mb-2 text-sm">Quantity</p>
               <div className="flex items-center gap-1">
                 <button
-                  className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption]} px-2 rounded text-sm`}
+                  className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]} px-2 rounded text-sm`}
                   onClick={() => handleQuantityChange(-1)}
                 >
                   -
@@ -702,7 +928,7 @@ function Lottery5d() {
                   className="w-16 bg-neutral-800 text-center py-1 rounded text-sm"
                 />
                 <button
-                  className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption]} px-2 rounded text-sm`}
+                  className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]} px-2 rounded text-sm`}
                   onClick={() => handleQuantityChange(1)}
                 >
                   +
@@ -713,10 +939,10 @@ function Lottery5d() {
               {multiplierOptions.map((label) => (
                 <button
                   key={label}
-                  className={`bg-neutral-700 px-2 py-1 rounded text-sm ${
+                  className={`bg-neutral-700 px-3 py-1 rounded-lg text-sm ${
                     popupMultiplier === label
-                      ? tailwindColorMap[betType === "number" ? "Number" : selectedOption]
-                      : tailwindColorMap[betType === "number" ? "Number" : selectedOption]?.replace("bg-", "hover:bg-")
+                      ? tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]
+                      : tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"].replace(" ", " hover:bg-gray-500")
                   } transition ${popupMultiplier === label ? "ring-2 ring-white" : ""}`}
                   onClick={() => handleMultiplierClick(label)}
                 >
@@ -740,12 +966,12 @@ function Lottery5d() {
             <div className="flex w-[calc(100%+16px)] -mx-2">
               <button
                 onClick={handleCloseModal}
-                className="bg-neutral-700 flex-1 hover:bg-neutral-600 transition py-3 text-sm"
+                className="bg-neutral-600 flex-1 hover:bg-neutral-500 transition py-3 text-sm"
               >
                 Cancel
               </button>
               <button
-                className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption]} flex-1 py-3 transition text-sm`}
+                className={`${tailwindColorMap[betType === "number" ? "Number" : selectedOption || "Number"]} flex-1 py-3 transition text-sm`}
                 onClick={handlePlaceBet}
               >
                 Total amount ₹{calculateTotalAmount()}
@@ -755,40 +981,38 @@ function Lottery5d() {
         </div>
       )}
 
-      {showSuccessPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-          <div className="bg-[#201d2b] rounded-2xl shadow-lg w-[90%] max-w-[300px] p-6 text-center">
-            <div className="text-white text-lg font-bold mb-4">Success</div>
-            <p className="text-white text-sm mb-6">Your bet has been placed successfully!</p>
-            <button
-              onClick={() => setShowSuccessPopup(false)}
-              className="bg-gradient-to-b from-[#fae59f] to-[#c4933f] text-[#8f5206] px-6 py-2 rounded-full font-medium"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+{showSuccessPopup && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000]">
+    <div className="bg-[#222] rounded-lg shadow-md w-[90%] max-w-sm p-6 text-center">
+      <div className="text-white text-lg font-bold mb-4">Success</div>
+      <p className="text-gray-300 text-sm mb-6">Your bet has been placed successfully!</p>
+      <button
+        onClick={() => setShowSuccessPopup(false)}
+        className="bg-gradient-to-r from-[#fae59f] to-[#c4933f] text-[#8f5206] px-6 py-2 rounded-full font-semibold"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
 
       {showHowToPlay && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[50]">
-          <div className="bg-gradient-to-r from-[#FAE59F] to-[#C4933F] rounded-2xl shadow-lg w-[90%] max-w-[360px] min-h-[65vh]">
-            <div className="text-center text-lg text-[#8f5206] font-normal mb-2 py-2 bg-gradient-to-r from-[#FAE59F] to-[#C4933F] rounded-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[500]">
+          <div className="bg-gradient-to-r from-[#FAE59F] to-[#C4933F] rounded-lg shadow-lg w-[90%] max-w-md">
+            <div className="text-center text-lg text-[#333] font-bold py-3 bg-gradient-to-r from-[#FAE59F] to-[#C4933F] rounded-t-lg">
               How to Play
             </div>
-            <div className="bg-[#201d2b] p-4 text-white text-sm max-h-[50vh] overflow-y-auto rounded-b-lg">
-              <p>1 minute 1 issue, 45 seconds to order, 15 seconds waiting for the draw. It opens all day. The total number of trades is 1440 issues.</p>
-              <p className="mt-2">If you spend 100 to trade, after deducting a 2% service fee, your contract amount is 98:</p>
-              <p className="mt-2">1. Select Number: If the result matches the number you selected for the chosen position (A, B, C, D, E), you will get (98*9) 882.</p>
-              <p className="mt-2">2. Select Big: If the result for the chosen position shows 5,6,7,8,9, you will get (98*1.98) 194.04.</p>
-              <p className="mt-2">3. Select Small: If the result for the chosen position shows 0,1,2,3,4, you will get (98*1.98) 194.04.</p>
-              <p className="mt-2">4. Select Odd: If the result for the chosen position is odd (1,3,5,7,9), you will get (98*1.98) 194.04.</p>
-              <p className="mt-2">5. Select Even: If the result for the chosen position is even (0,2,4,6,8), you will get (98*1.98) 194.04.</p>
+            <div className="bg-[#222] p-4 text-gray-300 text-sm max-h-[60vh] overflow-y-auto rounded-b-lg">
+              <p className="font-semibold">5D Lottery Game Rules</p>
+              <p className="mt-2 font-semibold">Draw Instructions</p>
+              <p className="mt-2">A 5-digit number (00000-99999) is drawn each period. Example:</p>
+              <p className="mt-2">Draw number: 12345</p>
+              <p>A=1, B=2, C=3, D=4, E=5</p>
             </div>
-            <div className="flex justify-center py-4 bg-[#242424]">
+            <div className="flex justify-center py-4 bg-[#222] rounded-b-lg">
               <button
                 onClick={() => setShowHowToPlay(false)}
-                className="w-16 h-10 flex items-center justify-center text-white bg-gradient-to-b px-20 from-[#c4933f] to-[#fae59f] rounded-full font-medium shadow-md"
+                className="bg-gradient-to-r from-[#fae59f] to-[#c4933f] text-[#8f5206] px-6 py-2 rounded-full font-semibold"
               >
                 Close
               </button>

@@ -33,8 +33,8 @@ const providerImages = {
 };
 
 const providers = [
-  { key: "playtech", name: "Playtech" },
-  { key: "goldenrace", name: "Goldenrace" },
+  
+ 
   { key: "smartsoft", name: "SmartSoft" },
   { key: "habanero", name: "Habanero" },
   { key: "betsoft", name: "Betsoft" },
@@ -42,13 +42,26 @@ const providers = [
   { key: "pgsoft", name: "PG Soft" },
   { key: "onetouch", name: "One Touch" },
   { key: "evoplay", name: "Evoplay" },
-  
   { key: "blueprint", name: "Blueprint" },
   { key: "galaxsys", name: "Galaxsys" },
+
+
+  { key: "fastgames", name: "Fast Games" },
+  { key: "crashgames", name: "Crash Games" },
+  { key: "ggames", name: "G Games" },
+  { key: "betsolutions", name: "Betsolutions" },
+  { key: "gamzix", name: "Gamzix" },
+  { key: "upgaming", name: "Upgaming" },
+  { key: "pragmaticplay", name: "Pragmatic Play" },
+  { key: "hacksaw", name: "Hacksaw" },
+  { key: "playpearls", name: "PlayPearls" },
+  { key: "asiagaming", name: "Asia Gaming (AG)" },
+  { key: "fachai", name: "Fachai" }
 ];
 
+
 function SlotGame() {
-  const [activeProvider, setActiveProvider] = useState("playtech");
+  const [activeProvider, setActiveProvider] = useState("SmartSoft");
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { AiOutlineCheck } from "react-icons/ai";
 import { Link } from "react-router-dom";
@@ -25,6 +26,7 @@ import detailicon from "./../../../Assets/finalicons/detailicon.png";
 import agree from "./../../../Assets/agree-a.png";
 import notAgree from "./../../../Assets/agree-b.png";
 import win from "./../../../Assets/updatedwin.png";
+import losspop from "./../../../Assets/losspop.png";
 import whitetick from "./../../../Assets/whitetick.png";
 import cross from "./../../../Assets/safed.png";
 import img0 from "./../../../Assets/WingoNew/n0-30bd92d1.png";
@@ -73,6 +75,7 @@ const tailwindColorMap = {
   GrVi: "bg-gradient-to-r from-green-600 via-violet-600 to-violet-600 hover:from-green-500 hover:via-violet-500 hover:to-violet-500",
   Big: "bg-orange-600 hover:bg-orange-500",
   Small: "bg-blue-600 hover:bg-blue-500",
+  "Ai Trade": "bg-green-500 hover:bg-green-600",
 };
 
 const buttonData = [
@@ -101,7 +104,7 @@ const buttonData = [
     activeIcon: (
       <img src={Timecolor} alt="active clock icon" className="w-14 h-14" />
     ),
-    duration: 180,
+    duration: 300,
   },
   {
     id: 3,
@@ -120,7 +123,11 @@ function LotteryWingo() {
   const { playCountdownAudio, playResultAudio } = useAudio();
   const hasPlayedCountdownRef = useRef(false);
   const previousResult = useRef(null);
-  // Component state
+  const lastFetchedPeriodRef = useRef(null);
+
+  const [latestWinBet, setLatestWinBet] = useState(null);
+  const [latestLossBet, setLatestLossBet] = useState(null);
+  const [latestPlacedBet, setLatestPlacedBet] = useState(null);
   const [activeTab, setActiveTab] = useState("gameHistory");
   const [activeButton, setActiveButton] = useState(0);
   const [selectedTitle, setSelectedTitle] = useState(buttonData[0].title);
@@ -139,6 +146,8 @@ function LotteryWingo() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [showWinPopupChecked, setShowWinPopupChecked] = useState(false);
+  const [showLossPopup, setShowLossPopup] = useState(false);
+  const [showLossPopupChecked, setShowLossPopupChecked] = useState(false);
   const [selectedNumberPopup, setSelectedNumberPopup] = useState(null);
   const [isRandomAnimating, setIsRandomAnimating] = useState(false);
   const [gameHistoryData, setGameHistoryData] = useState([]);
@@ -160,6 +169,47 @@ function LotteryWingo() {
 
   const multiplierOptions = ["X1", "X5", "X10", "X20", "X50", "X100"];
   const API_BASE_URL = "https://strike.atsproduct.in";
+
+  // Define fetchGameHistory function
+  const fetchGameHistory = useCallback(
+    async (page = 1, duration) => {
+      if (!isMounted.current) return { results: [], pagination: { total_pages: 1 } };
+
+      console.log("🔄 Starting fetchGameHistory...", { page, duration });
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const { results, pagination } = await fetchGameData(page, duration);
+        
+        if (isMounted.current) {
+          if (activeTab === "gameHistory") {
+            setGameHistoryData(results);
+          } else if (activeTab === "chart") {
+            setChartData(results);
+          }
+          setTotalPages(pagination.total_pages || 1);
+          console.log("✅ Game history fetched successfully", {
+            count: results.length,
+            totalPages: pagination.total_pages,
+          });
+        }
+
+        return { results, pagination };
+      } catch (error) {
+        console.error("❌ Error in fetchGameHistory:", error);
+        if (isMounted.current) {
+          setError("Failed to fetch game history: " + error.message);
+        }
+        return { results: [], pagination: { total_pages: 1 } };
+      } finally {
+        if (isMounted.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [activeTab]
+  );
 
   const fetchUserBets = useCallback(
     async (page = 1, limit = 10) => {
@@ -184,7 +234,6 @@ function LotteryWingo() {
           limit,
         });
 
-        // Use the gameApi to fetch user bets
         const response = await gameApi.getUserBets(gameType, duration, {
           page,
           limit,
@@ -193,7 +242,6 @@ function LotteryWingo() {
 
         if (isMounted.current) {
           if (response && response.success) {
-            // Handle different possible response structures
             let betsData = [];
 
             if (Array.isArray(response.data)) {
@@ -212,6 +260,24 @@ function LotteryWingo() {
               const formattedBets = betsData.map((bet, index) => {
                 console.log(`🎯 Processing bet ${index}:`, bet);
 
+                const normalizedStatus = bet.status
+                  ? bet.status.toLowerCase() === "won"
+                    ? "Won"
+                    : bet.status.toLowerCase() === "fail"
+                      ? "Lost"
+                      : "Pending"
+                  : bet.profitLoss > 0
+                    ? "Won"
+                    : bet.profitLoss < 0
+                      ? "Lost"
+                      : "Pending";
+
+                const betResult = bet.result
+                  ? typeof bet.result === "string"
+                    ? bet.result
+                    : `${bet.result.number || "?"} (${bet.result.size || "?"}, ${bet.result.color || "?"})`
+                  : "Pending";
+
                 return {
                   betId: bet.betId || bet._id || bet.id || `bet-${index}`,
                   period: bet.periodId || bet.period || "N/A",
@@ -226,42 +292,40 @@ function LotteryWingo() {
                   quantity: bet.quantity || 1,
                   afterTax: `₹${((bet.betAmount || bet.amount || 0) * 0.98).toFixed(2)}`,
                   tax: `₹${((bet.betAmount || bet.amount || 0) * 0.02).toFixed(2)}`,
-                  result: bet.result
-                    ? typeof bet.result === "string"
-                      ? bet.result
-                      : `${bet.result.number || "?"} (${bet.result.size || "?"}, ${bet.result.color || "?"})`
-                    : "Pending",
+                  result: betResult,
                   select:
                     bet.betType && bet.betValue
                       ? `${bet.betType}: ${bet.betValue}`
                       : bet.select || "N/A",
-                  status:
-                    bet.status ||
-                    (bet.profitLoss > 0
-                      ? "Won"
-                      : bet.profitLoss < 0
-                        ? "Lost"
-                        : "Pending"),
+                  status: normalizedStatus,
                   winLose:
                     bet.profitLoss !== undefined
                       ? bet.profitLoss >= 0
                         ? `+₹${bet.profitLoss}`
                         : `-₹${Math.abs(bet.profitLoss)}`
-                      : bet.winLose || "₹0",
-                  // Additional fields for display
+                      : "₹0",
                   date: bet.createdAt
                     ? new Date(bet.createdAt).toLocaleDateString()
                     : new Date().toLocaleDateString(),
                   time: bet.createdAt
                     ? new Date(bet.createdAt).toLocaleTimeString()
                     : new Date().toLocaleTimeString(),
+                  betType: bet.betType || "unknown",
+                  betValue: bet.betValue || bet.select || "N/A",
                 };
               });
 
               console.log("✅ Formatted bets:", formattedBets);
-              setUserBets(formattedBets);
+              // Merge with existing bets, avoiding duplicates
+              setUserBets((prevBets) => {
+                const existingBetIds = new Set(prevBets.map((bet) => bet.betId));
+                const newBets = formattedBets.filter(
+                  (bet) => !existingBetIds.has(bet.betId) || bet.status !== "Pending"
+                );
+                const updatedBets = [...newBets, ...prevBets.filter((bet) => !formattedBets.find((newBet) => newBet.betId === bet.betId))];
+                return updatedBets.sort((a, b) => new Date(b.orderTime) - new Date(a.orderTime));
+              });
 
-              // Handle pagination
               const totalPagesCalc =
                 response.pagination?.total_pages ||
                 Math.ceil((response.total || formattedBets.length) / limit) ||
@@ -272,14 +336,53 @@ function LotteryWingo() {
                 count: formattedBets.length,
                 totalPages: totalPagesCalc,
               });
+
+              // Check for win/loss and update popups
+              const latestBet = formattedBets.find(
+                (bet) =>
+                  bet.period === latestPlacedBet?.periodId &&
+                  bet.select === `${latestPlacedBet?.betType}: ${latestPlacedBet?.selection}`
+              );
+              if (latestBet && latestBet.status !== "Pending") {
+                if (latestBet.status === "Won") {
+                  setLatestWinBet({
+                    period: latestBet.period,
+                    result: latestBet.result.includes("(")
+                      ? {
+                          number: latestBet.result.split(" ")[0],
+                          size: latestBet.result.match(/\((.*?),\s*(.*?)\)/)[1],
+                          color: latestBet.result.match(/\((.*?),\s*(.*?)\)/)[2],
+                        }
+                      : { number: latestBet.result, size: "N/A", color: "N/A" },
+                    select: latestBet.select,
+                    profitLoss: parseFloat(latestBet.winLose.replace("₹", "")),
+                  });
+                  setShowWinPopup(true);
+                } else if (latestBet.status === "Lost") {
+                  setLatestLossBet({
+                    period: latestBet.period,
+                    result: latestBet.result.includes("(")
+                      ? {
+                          number: latestBet.result.split(" ")[0],
+                          size: latestBet.result.match(/\((.*?),\s*(.*?)\)/)[1],
+                          color: latestBet.result.match(/\((.*?),\s*(.*?)\)/)[2],
+                        }
+                      : { number: latestBet.result, size: "N/A", color: "N/A" },
+                    select: latestBet.select,
+                    profitLoss: parseFloat(latestBet.winLose.replace("₹", "")),
+                  });
+                  setShowLossPopup(true);
+                }
+                setLatestPlacedBet(null); // Clear after processing
+              }
             } else {
               console.log("ℹ️ No bets found in response");
-              setUserBets([]);
+              setUserBets((prev) => prev.filter((bet) => bet.status !== "Pending")); // Keep non-pending bets
               setTotalPages(1);
             }
           } else {
             console.log("❌ API response not successful:", response);
-            setUserBets([]);
+            setUserBets((prev) => prev.filter((bet) => bet.status !== "Pending"));
             setTotalPages(1);
             setError("Failed to fetch betting history");
           }
@@ -288,7 +391,7 @@ function LotteryWingo() {
         console.error("❌ Error in fetchUserBets:", error);
         if (isMounted.current) {
           setError("Failed to fetch user bets: " + error.message);
-          setUserBets([]);
+          setUserBets((prev) => prev.filter((bet) => bet.status !== "Pending"));
           setTotalPages(1);
         }
       } finally {
@@ -297,10 +400,10 @@ function LotteryWingo() {
         }
       }
     },
-    [activeButton, gameType]
+    [activeButton, gameType, latestPlacedBet]
   );
 
- useEffect(() => {
+  useEffect(() => {
     const totalSeconds = timeRemaining.minutes * 60 + timeRemaining.seconds;
 
     console.log("⏰ Time remaining:", {
@@ -309,33 +412,26 @@ function LotteryWingo() {
       seconds: timeRemaining.seconds,
     });
 
-    // Play countdown audio when exactly 4 seconds remain (changed from 5)
     if (totalSeconds === 4 && !hasPlayedCountdownRef.current) {
       console.log("🔊 Triggering countdown audio - 4 seconds remaining");
       playCountdownAudio();
       hasPlayedCountdownRef.current = true;
     }
 
-    // Play result audio when exactly 0 seconds remain (changed from 1)
     if (totalSeconds === 0 && hasPlayedCountdownRef.current) {
-      console.log("🔊 Triggering result audio - 0 seconds remaining (countdown at 00)");
+      console.log("🔊 Triggering result audio - 0 seconds remaining");
       playResultAudio();
     }
 
-    // Reset countdown flag when new period starts (more than 4 seconds, changed from 5)
     if (totalSeconds > 4) {
       hasPlayedCountdownRef.current = false;
     }
 
-    // Log when timer reaches 0
     if (totalSeconds === 0) {
       console.log("⏰ Timer reached 0");
     }
   }, [timeRemaining, playCountdownAudio, playResultAudio]);
 
-  // Also add this useEffect to handle result audio when new results come in
-
-  // Update the wallet balance fetching logic
   useEffect(() => {
     const fetchWalletBalance = async () => {
       try {
@@ -382,10 +478,10 @@ function LotteryWingo() {
     timeRemaining: socketTime,
     currentResult,
     gameHistory: socketHistory,
+    lastResult, // Add this destructured property
     placeBet,
   } = useSocket(gameType, buttonData[activeButton].duration);
 
-  // Update state based on socket data
   useEffect(() => {
     if (isConnected && socketPeriod) {
       if (socketPeriod.periodId && socketPeriod.periodId !== "Loading...") {
@@ -400,12 +496,28 @@ function LotteryWingo() {
   }, [isConnected, socketPeriod]);
 
   useEffect(() => {
-    if (isConnected && socketTime) {
-      setTimeRemaining(socketTime);
+    if (isConnected && lastResult) {
+      console.log("📊 WebSocket last result received:", lastResult);
+      setGameHistoryData((prev) => {
+        // Check if this result already exists to avoid duplicates
+        if (prev.length > 0 && prev[0]?.periodId === lastResult.periodId) {
+          console.log("⚠️ Result already exists, skipping duplicate");
+          return prev;
+        }
+        
+        // Add new result to the top and keep only the latest 10
+        const updatedHistory = [lastResult, ...prev.slice(0, 9)];
+        console.log("✅ Game history updated with new result:", {
+          newResult: lastResult,
+          totalResults: updatedHistory.length
+        });
+        
+        return updatedHistory;
+      });
+      lastFetchedPeriodRef.current = lastResult.periodId;
     }
-  }, [isConnected, socketTime]);
+  }, [isConnected, lastResult]);
 
-  // Auto-close betting popups when time remaining is 5 seconds or less
   useEffect(() => {
     if (
       (showPopup || selectedNumberPopup || showBigPopup) &&
@@ -416,7 +528,118 @@ function LotteryWingo() {
     }
   }, [timeRemaining, showPopup, selectedNumberPopup, showBigPopup]);
 
-  // Modified: Show loading state during period transitions
+  // Check bet result when period ends
+  useEffect(() => {
+    if (timeRemaining.minutes === 0 && timeRemaining.seconds === 0) {
+      console.log("⏰ Period ended, preparing for new data");
+      setIsPeriodTransitioning(true);
+      setCurrentPeriod({ periodId: "Loading..." });
+
+      const duration = buttonData[activeButton].duration;
+      const updateTimer = setTimeout(async () => {
+        console.log("🔄 Period end cleanup and preparation for new data");
+
+        // Only fetch if not connected to WebSocket or as a fallback
+        if (!isConnected) {
+          console.log("📡 WebSocket not connected, fetching manually");
+          if (activeTab === "gameHistory" || activeTab === "chart") {
+            const { results } = await fetchGameHistory(1, duration);
+            setCurrentPage(1);
+            
+            if (!results || results.length === 0) {
+              console.log("⚠️ No new results, retrying...");
+              let retryCount = 0;
+              const maxRetries = 2; // Reduced retries since WebSocket should handle this
+              while (retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const retryResults = await fetchGameHistory(1, duration);
+                if (retryResults.results && retryResults.results.length > 0) {
+                  break;
+                }
+                retryCount++;
+                console.log(`🔄 Retry ${retryCount}/${maxRetries}`);
+              }
+            }
+          }
+
+          if (activeTab === "myHistory") {
+            await fetchUserBets(1);
+          }
+
+          // Reset timer for next period if not connected to WebSocket
+          setTimeRemaining({
+            minutes: Math.floor(duration / 60),
+            seconds: duration % 60,
+          });
+        } else {
+          console.log("📡 WebSocket connected, relying on real-time updates");
+        }
+        
+        setIsPeriodTransitioning(false);
+      }, 1000);
+
+      return () => clearTimeout(updateTimer);
+    }
+  }, [timeRemaining.minutes, timeRemaining.seconds, activeButton, activeTab, isConnected, fetchGameHistory, fetchUserBets]);
+
+  // Auto-close win popup
+  useEffect(() => {
+    if (showWinPopup && showWinPopupChecked && latestWinBet) {
+      const timer = setTimeout(() => {
+        setShowWinPopup(false);
+        setLatestWinBet(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showWinPopup, showWinPopupChecked, latestWinBet]);
+
+  // Auto-close loss popup
+  useEffect(() => {
+    if (showLossPopup && showLossPopupChecked && latestLossBet) {
+      const timer = setTimeout(() => {
+        setShowLossPopup(false);
+        setLatestLossBet(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showLossPopup, showLossPopupChecked, latestLossBet]);
+
+  useEffect(() => {
+    if (
+      isConnected &&
+      socketPeriod &&
+      socketPeriod.periodId !== "Loading..." &&
+      socketPeriod.periodId !== lastFetchedPeriodRef.current
+    ) {
+      console.log("🔄 New period detected, auto-fetching data", {
+        periodId: socketPeriod.periodId,
+        duration: buttonData[activeButton].duration,
+        activeTab,
+      });
+
+      if (activeTab === "gameHistory" || activeTab === "chart") {
+        const duration = buttonData[activeButton].duration;
+        fetchGameData(currentPage, duration)
+          .then(({ results, pagination }) => {
+            if (isMounted.current) {
+              if (activeTab === "gameHistory") {
+                setGameHistoryData(results);
+              } else if (activeTab === "chart") {
+                setChartData(results);
+              }
+              setTotalPages(pagination.total_pages || 1);
+            }
+          })
+          .catch((error) => {
+            console.error("Error auto-fetching game data:", error);
+            setError("Failed to fetch game history: " + error.message);
+          });
+      }
+
+      lastFetchedPeriodRef.current = socketPeriod.periodId;
+    }
+  }, [socketPeriod, activeTab, activeButton, currentPage]);
+
   useEffect(() => {
     if (timeRemaining.minutes === 0 && timeRemaining.seconds === 0) {
       setIsPeriodTransitioning(true);
@@ -443,45 +666,44 @@ function LotteryWingo() {
     }
   }, [timeRemaining.minutes, timeRemaining.seconds, activeButton, isConnected]);
 
-  // Update state more efficiently
   useEffect(() => {
-  if (isConnected) {
-    const updates = {};
-    let hasUpdates = false;
+    if (isConnected) {
+      const updates = {};
+      let hasUpdates = false;
 
-    if (socketPeriod && socketPeriod.periodId !== currentPeriod.periodId) {
-      // Only update if we have a valid period ID (not loading)
-      if (socketPeriod.periodId && socketPeriod.periodId !== "Loading...") {
-        updates.period = socketPeriod;
+      if (
+        socketPeriod &&
+        socketPeriod.periodId !== currentPeriod.periodId
+      ) {
+        if (socketPeriod.periodId && socketPeriod.periodId !== "Loading...") {
+          updates.period = socketPeriod;
+          hasUpdates = true;
+        }
+      }
+
+      if (
+        socketTime &&
+        (socketTime.minutes !== timeRemaining.minutes ||
+          socketTime.seconds !== timeRemaining.seconds)
+      ) {
+        updates.time = socketTime;
         hasUpdates = true;
       }
-    }
 
-    if (
-      socketTime &&
-      (socketTime.minutes !== timeRemaining.minutes ||
-        socketTime.seconds !== timeRemaining.seconds)
-    ) {
-      updates.time = socketTime;
-      hasUpdates = true;
+      if (hasUpdates) {
+        if (updates.period) setCurrentPeriod(updates.period);
+        if (updates.time) setTimeRemaining(updates.time);
+      }
     }
+  }, [
+    isConnected,
+    socketPeriod,
+    socketTime,
+    currentPeriod.periodId,
+    timeRemaining.minutes,
+    timeRemaining.seconds,
+  ]);
 
-    if (hasUpdates) {
-      // Update period immediately without transitioning state
-      if (updates.period) setCurrentPeriod(updates.period);
-      if (updates.time) setTimeRemaining(updates.time);
-    }
-  }
-}, [
-  isConnected,
-  socketPeriod,
-  socketTime,
-  currentPeriod.periodId,
-  timeRemaining.minutes,
-  timeRemaining.seconds,
-]);
-
-  // Auto-close success popup after 3 seconds
   useEffect(() => {
     if (showSuccessPopup) {
       const timer = setTimeout(() => {
@@ -494,11 +716,11 @@ function LotteryWingo() {
   useEffect(() => {
     if (currentResult && currentResult !== previousResult.current) {
       console.log("🔊 New result received, playing result audio");
-      setTimeout(() => playResultAudio(), 300); // Reduced from 1000ms to 300ms
+      setTimeout(() => playResultAudio(), 300);
       previousResult.current = currentResult;
     }
   }, [currentResult, playResultAudio]);
-  // Fetch game data from API
+
   const fetchGameData = async (page, duration) => {
     try {
       const accessToken = localStorage.getItem("token");
@@ -506,6 +728,7 @@ function LotteryWingo() {
         throw new Error("No access token found. Please log in.");
       }
 
+      console.log(`Fetching game data for page: ${page}, duration: ${duration}`);
       const response = await fetch(
         `${API_BASE_URL}/api/games/wingo/${duration}/history?page=${page}&limit=10`,
         {
@@ -524,11 +747,14 @@ function LotteryWingo() {
       }
 
       const data = await response.json();
+      console.log("API Response:", data);
 
       let results = [];
+      let totalPages = 1;
+
       if (data.success && data.data) {
-        const dataArray =
-          data.data.results || (Array.isArray(data.data) ? data.data : []);
+        const dataArray = data.data.results || (Array.isArray(data.data) ? data.data : []);
+
         if (Array.isArray(dataArray)) {
           results = dataArray.map((item) => ({
             periodId: item.periodId || "N/A",
@@ -537,72 +763,100 @@ function LotteryWingo() {
             parity: item.result?.parity || "N/A",
             timestamp: item.timestamp || new Date().toISOString(),
           }));
-        } else if (typeof data.data === "object") {
-          results = [
-            {
-              periodId: data.data.periodId || "N/A",
-              number: data.data.result?.number || 0,
-              size: data.data.result?.size || "N/A",
-              parity: data.data.result?.parity || "N/A",
-              timestamp: data.data.timestamp || new Date().toISOString(),
-            },
-          ];
         }
+
+        if (data.data.pagination) {
+          totalPages = data.data.pagination.total_pages ||
+                      data.data.pagination.totalPages ||
+                      data.data.pagination.total || 1;
+        } else if (data.pagination) {
+          totalPages = data.pagination.total_pages ||
+                      data.pagination.totalPages ||
+                      data.pagination.total || 1;
+        } else if (data.totalPages) {
+          totalPages = data.totalPages;
+        } else if (data.total_pages) {
+          totalPages = data.total_pages;
+        }
+
+        console.log("Pagination info:", {
+          totalPages,
+          currentPage: page,
+          resultsCount: results.length,
+        });
       }
 
       return {
         results,
-        pagination: data.data?.pagination || { total_pages: 1 },
+        pagination: {
+          total_pages: totalPages,
+          current_page: page,
+          has_next: page < totalPages,
+          has_prev: page > 1,
+        },
       };
     } catch (error) {
       console.error("Error fetching game data:", error);
-      return { results: [], pagination: { total_pages: 1 } };
+      return {
+        results: [],
+        pagination: {
+          total_pages: 1,
+          current_page: 1,
+          has_next: false,
+          has_prev: false,
+        },
+      };
     }
   };
 
-  // Fetch user bets
-
-  // Game History useEffect
   useEffect(() => {
-    if (activeTab === "gameHistory") {
+    if (activeTab === "gameHistory" || activeTab === "chart") {
       const duration = buttonData[activeButton].duration;
-      const fetchGameHistory = async () => {
-        setIsLoading(true);
-        const response = await fetchGameData(currentPage, duration);
-        if (isMounted.current) {
-          setGameHistoryData(response.results);
-          setTotalPages(response.pagination.total_pages || 1);
-          setIsLoading(false);
-        }
-      };
-      fetchGameHistory().catch(console.error);
-    }
-  }, [activeTab, currentPage, activeButton]);
+      
+      // Initial fetch
+      fetchGameHistory(1, duration);
 
-  // Chart useEffect
-  useEffect(() => {
-    if (activeTab === "chart") {
-      const duration = buttonData[activeButton].duration;
-      const fetchChartData = async () => {
-        setIsLoading(true);
-        const response = await fetchGameData(currentPage, duration);
-        if (isMounted.current) {
-          setChartData(response.results);
-          setTotalPages(response.pagination.total_pages || 1);
-          setIsLoading(false);
+      // Reduce interval to 60 seconds since WebSocket provides real-time updates
+      const interval = setInterval(() => {
+        console.log("⏰ Periodic sync fetch (every 60 seconds) - fallback for WebSocket");
+        // Only fetch if WebSocket is not connected or as a sync mechanism
+        if (!isConnected) {
+          console.log("📡 WebSocket disconnected, fetching manually");
+          fetchGameHistory(1, duration);
+          setCurrentPage(1);
+        } else {
+          console.log("📡 WebSocket connected, skipping manual fetch");
         }
+      }, 60000); // Increased from 30s to 60s
+
+      return () => {
+        console.log("🛑 Cleaning up periodic sync fetch interval");
+        clearInterval(interval);
       };
-      fetchChartData().catch(console.error);
     }
-  }, [activeTab, currentPage, activeButton]);
+  }, [activeTab, activeButton, fetchGameHistory, isConnected]);
+
+  useEffect(() => {
+    console.log("📡 WebSocket connection status:", {
+      isConnected,
+      hasLastResult: !!lastResult,
+      hasPeriodData: !!socketPeriod,
+      hasTimeData: !!socketTime
+    });
+    
+    if (connectionError) {
+      console.error("📡 WebSocket connection error:", connectionError);
+      setError("Connection lost. Switching to manual updates.");
+    }
+  }, [isConnected, connectionError, lastResult, socketPeriod, socketTime]);
 
   useEffect(() => {
     if (activeTab === "myHistory") {
+      console.log("🔄 Switched to My History tab, fetching latest bets");
       fetchUserBets(currentPage).catch(console.error);
     }
   }, [activeTab, currentPage, fetchUserBets]);
 
-  // Initial timer setup
   useEffect(() => {
     const duration = buttonData[activeButton].duration;
     setTimeRemaining({
@@ -618,9 +872,8 @@ function LotteryWingo() {
         setIsPeriodTransitioning(false);
       }
     }, 500);
-  }, [activeButton]);
+  }, [activeButton, isConnected]);
 
-  // Debug token status
   const debugTokenStatus = () => {
     const token = localStorage.getItem("token");
     console.log("🔍 Token Status:", {
@@ -633,7 +886,6 @@ function LotteryWingo() {
     debugTokenStatus();
   }, []);
 
-  // Event handlers
   const handleButtonClick = (buttonId) => {
     setActiveButton(buttonId);
     const selectedButton = buttonData.find((button) => button.id === buttonId);
@@ -674,7 +926,11 @@ function LotteryWingo() {
   };
 
   const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) setCurrentPage(page);
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      console.log(`Changing page from ${currentPage} to ${page}`);
+      setCurrentPage(page);
+      setIsLoading(true);
+    }
   };
 
   const handleRandomClick = () => {
@@ -717,7 +973,7 @@ function LotteryWingo() {
     setPopupMultiplier("X1");
   };
 
-  const handlePlaceBet = () => {
+  const handlePlaceBet = async () => {
     if (!checked) {
       alert("Please agree to the pre-sale rules");
       return;
@@ -754,6 +1010,37 @@ function LotteryWingo() {
 
     if (betPlaced) {
       console.log("✅ Bet sent to WebSocket successfully");
+
+      // Immediately add bet to local state
+      const newBet = {
+        betId: `temp-${Date.now()}`,
+        period: currentPeriod.periodId,
+        orderTime: new Date().toLocaleString(),
+        orderNumber: `ORD-${Date.now()}`,
+        amount: `₹${totalAmount}`,
+        quantity: quantity,
+        afterTax: `₹${(totalAmount * 0.98).toFixed(2)}`,
+        tax: `₹${(totalAmount * 0.02).toFixed(2)}`,
+        result: "Pending",
+        select: `${betType}: ${selection}`,
+        status: "Pending",
+        winLose: "₹0",
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        betType: betType,
+        betValue: selection,
+      };
+
+      setUserBets((prevBets) => [newBet, ...prevBets]);
+      console.log("✅ Bet added to local state immediately:", newBet);
+
+      setLatestPlacedBet({
+        periodId: currentPeriod.periodId,
+        selection,
+        betType,
+        amount: totalAmount,
+      });
+
       setShowPopup(null);
       setShowBigPopup(null);
       setSelectedNumberPopup(null);
@@ -762,6 +1049,15 @@ function LotteryWingo() {
       setQuantity(1);
       setPopupMultiplier("X1");
       setShowSuccessPopup(true);
+
+      // Fetch latest bets to sync with server
+      console.log("🔄 Scheduling server sync after bet placement");
+      setTimeout(() => {
+        fetchUserBets(currentPage).catch((error) => {
+          console.error("Error syncing bets after placement:", error);
+          setError("Failed to sync bet with server");
+        });
+      }, 500);
     } else {
       console.log("❌ Failed to send bet to WebSocket");
       setError("Failed to place bet. Please try again.");
@@ -769,11 +1065,9 @@ function LotteryWingo() {
   };
 
   const getDisplayPeriodId = () => {
-  // Always return the current period ID, never show loading
-  return currentPeriod.periodId || currentPeriod.periodId;
-};
+    return currentPeriod.periodId || currentPeriod.periodId;
+  };
 
-  // Game History Table Component
   const GameHistoryTable = () => {
     if (!gameHistoryData || gameHistoryData.length === 0) {
       return (
@@ -983,7 +1277,7 @@ function LotteryWingo() {
               <button
                 key={button.id}
                 onClick={() => handleButtonClick(button.id)}
-                className={`flex flex-col items-center  px-2 py-1 rounded-lg w-full mx-0.5 transition-all duration-300 ${
+                className={`flex flex-col items-center px-2 py-1 rounded-lg w-full mx-0.5 transition-all duration-300 ${
                   activeButton === button.id
                     ? "bg-gradient-to-b from-[#fae59f] to-[#c4933f] text-[#8f5206]"
                     : "bg-[#4d4d4c] text-[#a8a5a1]"
@@ -1002,73 +1296,72 @@ function LotteryWingo() {
         </div>
 
         <div
-  className="rounded-lg mt-2 bg-cover mb-4 p-4"
-  style={{
-    backgroundImage: `url(${back})`,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-  }}
->
-  <div className="flex justify-between items-center flex-wrap">
-    <div className="min-w-0">
-      <button
-        onClick={() => setShowHowToPlay(true)}
-        className="border border-[#8f5206] rounded-full px-10 py-1 flex items-center justify-center gap-1 text-[#8f5206] text-center shrink-0"
-      >
-        <img src={HowToPlay} alt="How to Play" className="w-4 h-4" />
-        <p className="text-[#8f5206] text-xs font-medium">
-          How to Play
-        </p>
-      </button>
-      <p className="text-[#8f5206] mb-2 mt-2 text-sm font-semibold truncate whitespace-nowrap max-w-full">
-        {selectedTitle}
-      </p>
+          className="rounded-lg mt-2 bg-cover mb-4 p-4"
+          style={{
+            backgroundImage: `url(${back})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="flex justify-between items-center flex-wrap">
+            <div className="min-w-0">
+              <button
+                onClick={() => setShowHowToPlay(true)}
+                className="border border-[#8f5206] rounded-full px-10 py-1 flex items-center justify-center gap-1 text-[#8f5206] text-center shrink-0"
+              >
+                <img src={HowToPlay} alt="How to Play" className="w-4 h-4" />
+                <p className="text-[#8f5206] text-xs font-medium">
+                  How to Play
+                </p>
+              </button>
+              <p className="text-[#8f5206] mb-2 mt-2 text-sm font-semibold truncate whitespace-nowrap max-w-full">
+                {selectedTitle}
+              </p>
 
-      <div className="flex space-x-1">
-        {gameHistoryData.slice(0, 5).map((item, idx) => (
-          <span
-            key={idx}
-            className="w-7 h-7 rounded-full flex items-center justify-center"
-          >
-            <img
-              src={imageMap[item.number] || imageMap.default}
-              alt={`History Ball ${item.number}`}
-              className="w-full h-full object-cover rounded-full"
-            />
-          </span>
-        ))}
-      </div>
-    </div>
-    <div className="text-center min-w-0 mt-2 sm:mt-0">
-      <p className="text-[#8f5206] text-sm -mr-6 font-bold">
-        Time Remaining
-      </p>
-      <div className="flex space-x-0.5 text-[#8f5206] justify-end items-center mt-1">
-        <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
-          {formatTime(timeRemaining.minutes)[0]}
-        </span>
-        <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
-          {formatTime(timeRemaining.minutes)[1]}
-        </span>
-        <span className="text-[#8f5206] font-bold text-lg px-0.5 w-4 text-center">
-          :
-        </span>
-        <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
-          {formatTime(timeRemaining.seconds)[0]}
-        </span>
-        <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
-          {formatTime(timeRemaining.seconds)[1]}
-        </span>
-      </div>
-      {/* Fixed height container to prevent position shifts */}
-      <div className="mt-1 h-5 flex items-center justify-center">
-        <p className="text-sm font-bold text-[#8f5206] min-w-[120px] text-center">
-          {getDisplayPeriodId()}
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
+              <div className="flex space-x-1">
+                {gameHistoryData.slice(0, 5).map((item, idx) => (
+                  <span
+                    key={idx}
+                    className="w-7 h-7 rounded-full flex items-center justify-center"
+                  >
+                    <img
+                      src={imageMap[item.number] || imageMap.default}
+                      alt={`History Ball ${item.number}`}
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="text-center min-w-0 mt-2 sm:mt-0">
+              <p className="text-[#8f5206] text-sm -mr-6 font-bold">
+                Time Remaining
+              </p>
+              <div className="flex space-x-0.5 text-[#8f5206] justify-end items-center mt-1">
+                <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
+                  {formatTime(timeRemaining.minutes)[0]}
+                </span>
+                <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
+                  {formatTime(timeRemaining.minutes)[1]}
+                </span>
+                <span className="text-[#8f5206] font-bold text-lg px-0.5 w-4 text-center">
+                  :
+                </span>
+                <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
+                  {formatTime(timeRemaining.seconds)[0]}
+                </span>
+                <span className="bg-[#f7e2c5] text-[#8f5206] font-bold text-lg rounded px-1 py-0.5 w-6 text-center">
+                  {formatTime(timeRemaining.seconds)[1]}
+                </span>
+              </div>
+              <div className="mt-1 h-5 flex items-center justify-center">
+                <p className="text-sm font-bold text-[#8f5206] min-w-[120px] text-center">
+                  {getDisplayPeriodId()}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {showHowToPlay && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[50]">
@@ -1118,16 +1411,15 @@ function LotteryWingo() {
                 >
                   Close
                 </button>
-                -
               </div>
             </div>
           </div>
         )}
 
-        {showWinPopup && (
-          <div className="fixed inset-0 flex items-center justify-center z-50">
+        {showWinPopup && latestWinBet && (
+          <div className="fixed inset-0 flex items-center justify-center z-[100]">
             <div className="bg-black bg-opacity-70 fixed inset-0"></div>
-            <div className="relative z-10 flex flex-col items-center max-w-[400px] mx-auto">
+            <div className="relative z-10 flex flex-col items-center justify-between max-w-[400px] mx-auto">
               <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[400px] h-[400px] overflow-hidden">
                 <Confetti
                   width={400}
@@ -1147,80 +1439,119 @@ function LotteryWingo() {
                 />
               </div>
               <div className="relative w-[400px] h-[400px] flex items-center justify-center">
-                <img
-                  src={win}
-                  alt="Winner"
-                  className="w-full h-full object-contain"
-                />
+                <img src={win} alt="Winner" className="w-full h-full object-contain" />
                 <div className="absolute top-[30%] left-1/2 transform -translate-x-1/2 text-center text-white">
                   <p className="text-2xl font-bold text-white drop-shadow-lg">
-                    Congratulations
+                    Congratulations!
                   </p>
                 </div>
-                <div className="absolute top-[62%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white">
+                <div className="absolute top-[62%] left-1/2 transform -translate-x-1/2 text-center text-white w-full px-4">
                   <div className="flex items-center justify-center gap-x-2 mt-1">
-                    <h2 className="text-xs whitespace-nowrap text-white font-medium mr-1">
+                    <h2 className="text-xs whitespace-nowrap font-medium mr-1">
                       Lottery results
                     </h2>
-                    <p className="text-xs bg-green-500 px-1 border-2 border-white py-0.5 rounded text-white">
-                      {gameHistoryData[0]?.number || "N/A"}
-                    </p>
-                    <p className="text-xs bg-green-500 px-1 border-2 border-white py-0.5 rounded">
-                      {gameHistoryData[0]?.size || "Big"}
-                    </p>
-                    <p className="text-xs bg-green-500 px-1 border-2 border-white py-0.5 rounded">
-                      {gameHistoryData[0]?.parity || "Even"}
-                    </p>
-                  </div>
-                  <div className="mt-4 text-center">
-                    <p className="text-md font-bold text-red-500">Bonus</p>
-                    <p className="text-xl font-bold text-red-500">
-                      ₹{walletBalance}
-                    </p>
-                    <p className="text-xs mt-2 text-gray-400">
-                      Period: {buttonData[activeButton].duration} seconds{" "}
-                      {currentPeriod.periodId}
-                    </p>
-                  </div>
-                </div>
-                <label className="absolute bottom-4 left-20 inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showWinPopupChecked}
-                    onChange={() =>
-                      setShowWinPopupChecked(!showWinPopupChecked)
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-6 h-6 relative">
                     <img
-                      src={agree}
-                      alt="checkbox background"
-                      className="w-full h-full object-contain"
+                      src={imageMap[latestWinBet.result.number] || imageMap.default}
+                      alt={`Result ${latestWinBet.result.number}`}
+                      className="w-6 h-6 rounded-full"
                     />
-                    {showWinPopupChecked && (
-                      <img
-                        src={whitetick}
-                        alt="tick"
-                        className="absolute inset-0 w-3 h-3 m-auto pointer-events-none"
-                      />
-                    )}
                   </div>
-                  <span className="ml-1 text-sm text-white drop-shadow">
-                    3 sec auto close
-                  </span>
-                </label>
+                  <p className="text-xs mt-1">
+                    Period: {latestWinBet.period}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Profit: +₹{Math.abs(latestWinBet.profitLoss).toFixed(2)}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Select: {latestWinBet.select}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Result: {latestWinBet.result.number} ({latestWinBet.result.size}, {latestWinBet.result.color})
+                  </p>
+                  <div className="flex items-center justify-center mt-2">
+                    <input
+                      type="checkbox"
+                      id="win-auto-close"
+                      checked={showWinPopupChecked}
+                      onChange={() => setShowWinPopupChecked(!showWinPopupChecked)}
+                      className="w-4 h-4 mr-1"
+                    />
+                    <label htmlFor="win-auto-close" className="text-xs">
+                      Auto-close in 3 seconds
+                    </label>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowWinPopup(false);
+                      setLatestWinBet(null);
+                    }}
+                    className="mt-2 bg-[#17b15e] text-white text-sm font-bold py-1 px-4 rounded-full hover:bg-green-600"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => setShowWinPopup(false)}
-                className="mt-2 w-8 h-8 rounded-full flex items-center justify-center shadow-md"
-              >
-                <img
-                  src={cross}
-                  alt="Close"
-                  className="w-10 h-10 object-contain"
-                />
-              </button>
+            </div>
+          </div>
+        )}
+
+        {showLossPopup && latestLossBet && (
+          <div className="fixed inset-0 flex items-center justify-center z-[100]">
+            <div className="bg-black bg-opacity-70 fixed inset-0"></div>
+            <div className="relative z-10 flex flex-col items-center justify-between max-w-[400px] mx-auto">
+              <div className="relative w-[400px] h-[400px] flex items-center justify-center">
+                <img src={losspop} alt="Loss" className="w-full h-full object-contain" />
+                <div className="absolute top-[30%] left-1/2 transform -translate-x-1/2 text-center text-white">
+                  <p className="text-2xl font-bold text-white drop-shadow-lg">
+                    Better Luck Next Time!
+                  </p>
+                </div>
+                <div className="absolute top-[62%] left-1/2 transform -translate-x-1/2 text-center text-white w-full px-4">
+                  <div className="flex items-center justify-center gap-x-2 mt-1">
+                    <h2 className="text-xs whitespace-nowrap font-medium mr-1">
+                      Lottery results
+                    </h2>
+                    <img
+                      src={imageMap[latestLossBet.result.number] || imageMap.default}
+                      alt={`Result ${latestLossBet.result.number}`}
+                      className="w-6 h-6 rounded-full"
+                    />
+                  </div>
+                  <p className="text-xs mt-1">
+                    Period: {latestLossBet.period}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Loss: -₹{Math.abs(latestLossBet.profitLoss).toFixed(2)}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Select: {latestLossBet.select}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Result: {latestLossBet.result.number} ({latestLossBet.result.size}, {latestLossBet.result.color})
+                  </p>
+                  <div className="flex items-center justify-center mt-2">
+                    <input
+                      type="checkbox"
+                      id="loss-auto-close"
+                      checked={showLossPopupChecked}
+                      onChange={() => setShowLossPopupChecked(!showLossPopupChecked)}
+                      className="w-4 h-4 mr-1"
+                    />
+                    <label htmlFor="loss-auto-close" className="text-xs font-medium">
+                      Auto-close in 3 seconds
+                    </label>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowLossPopup(false);
+                      setLatestLossBet(null);
+                    }}
+                    className="mt-2 bg-[#d23838] text-white text-sm font-bold py-1 px-4 rounded-full hover:bg-red-600"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1391,6 +1722,121 @@ function LotteryWingo() {
                     </button>
                     <button
                       className={`${tailwindColorMap[showPopup]} flex-1 py-3 transition text-sm`}
+                      onClick={handlePlaceBet}
+                    >
+                      Total amount ₹{calculateTotalAmount()}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {selectedNumberPopup && (
+              <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-[60] bg-neutral-900 text-white w-full max-w-[400px] shadow-lg rounded-t-lg">
+                <div
+                  className={`${tailwindColorMap[selectedNumberPopup.color]} rounded-t-xl flex flex-col items-center text-center`}
+                >
+                  <h2 className="text-lg font-bold mt-2">{selectedTitle}</h2>
+                  <div className="flex w-full max-w-xs items-center justify-center bg-white text-black gap-2 mt-2 p-2 rounded-lg">
+                    <span>Select</span>
+                    <span className="font-bold">
+                      {selectedNumberPopup.number}
+                    </span>
+                  </div>
+                  <div
+                    className={`relative ${tailwindColorMap[selectedNumberPopup.color]} rounded-t-xl px-0 flex flex-col items-center text-center p-[14px]`}
+                  >
+                    <div className="absolute top-0 mr-0 right-0 w-0 h-0 border-t-[30px] border-l-[200px] border-r-0 border-b-0 border-solid border-transparent border-l-neutral-900"></div>
+                    <div className="absolute top-0 ml-0 left-0 w-0 h-0 border-t-[30px] border-r-[200px] border-l-0 border-b-0 border-solid border-transparent border-r-neutral-900"></div>
+                  </div>
+                </div>
+                <div className="mt-6 space-y-4 px-2">
+                  <div className="flex justify-between">
+                    <p className="mb-2 text-sm">Balance</p>
+                    <div className="flex gap-1">
+                      {["1", "10", "100", "1000"].map((label) => (
+                        <button
+                          key={label}
+                          className={`px-2 py-1 rounded text-sm ${
+                            betAmount === parseInt(label)
+                              ? `${tailwindColorMap[selectedNumberPopup.color]} ring-2 ring-white`
+                              : "bg-neutral-700 hover:bg-neutral-600"
+                          }`}
+                          onClick={() => setBetAmount(parseInt(label))}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <p className="mb-2 text-sm">Quantity</p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className={`${tailwindColorMap[selectedNumberPopup.color]} px-2 rounded text-sm`}
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="text"
+                        value={quantity}
+                        onChange={(e) =>
+                          setQuantity(parseInt(e.target.value) || 1)
+                        }
+                        className="w-16 bg-neutral-800 text-center py-1 rounded text-sm"
+                      />
+                      <button
+                        className={`${tailwindColorMap[selectedNumberPopup.color]} px-2 rounded text-sm`}
+                        onClick={() => setQuantity(quantity + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 mt-2 justify-end">
+                    {multiplierOptions.map((label) => (
+                      <button
+                        key={label}
+                        className={`px-2 py-1 rounded text-sm transition ${
+                          popupMultiplier === label
+                            ? `${tailwindColorMap[selectedNumberPopup.color]} ring-2 ring-white`
+                            : "bg-neutral-700 hover:bg-neutral-600"
+                        }`}
+                        onClick={() => handlePopupMultiplierClick(label)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="" onClick={() => setChecked(!checked)}>
+                      {checked ? (
+                        <img src={agree} alt="icon" className="w-5 h-5 ml-2" />
+                      ) : (
+                        <img
+                          src={notAgree}
+                          alt="icon"
+                          className="w-5 h-5 ml-2"
+                        />
+                      )}
+                    </div>
+                    <span className="text-sm">I agree</span>
+                    <button
+                      className="text-red-500 hover:underline text-sm"
+                      onClick={handleOpenPreSalePopup}
+                    >
+                      Pre-sale rules
+                    </button>
+                  </div>
+                  <div className="flex w-[calc(100%+16px)] -mx-2">
+                    <button
+                      onClick={handleCancelBet}
+                      className="bg-neutral-700 flex-1 hover:bg-neutral-600 transition py-3 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className={`${tailwindColorMap[selectedNumberPopup.color]} flex-1 py-3 transition text-sm`}
                       onClick={handlePlaceBet}
                     >
                       Total amount ₹{calculateTotalAmount()}
@@ -1763,344 +2209,299 @@ function LotteryWingo() {
         </div>
 
         <div className="mb-2 rounded-lg shadow">
-  {activeTab === "gameHistory" && (
-    <>
-      <GameHistoryTable />
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center mt-4 space-x-2">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
-          >
-            Previous
-          </button>
+  
 
-          <div className="flex items-center space-x-1">
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pageNum = currentPage <= 3 ? i + 1 : currentPage - 2 + i;
-              if (pageNum > totalPages) return null;
+
+{activeTab === "gameHistory" && <GameHistoryTable />}
+      
+      
+  {activeTab === "chart" && (
+  <>
+    <div className="p-2 rounded-t-lg">
+      <table className="table-fixed w-full text-left bg-[#333332] rounded-t-lg">
+        <thead>
+          <tr className="bg-gray-700 rounded-t-lg">
+            <th className="px-2 w-2/5 py-2 text-center text-white text-sm border-b rounded-tl-xl border-[#3a3947]">
+              Period
+            </th>
+            <th className="px-2 w-3/5 py-2 text-center text-white text-sm border-b rounded-tr-xl border-[#3a3947]">
+              Number
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {chartData.length > 0 ? (
+            chartData.map((row, index) => {
+              // Transform chartData to match tableData structure
+              const tableRow = {
+                timestamp: row.timestamp
+                  ? new Date(row.timestamp).toLocaleDateString()
+                  : new Date().toLocaleDateString(),
+                highlightedNumber: row.number,
+                type: row.size === "Big" ? "B" : row.size === "Small" ? "S" : "",
+              };
 
               return (
-                <button
-                  key={pageNum}
-                  onClick={() => handlePageChange(pageNum)}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    currentPage === pageNum
-                      ? "bg-[#d9ac4f] text-black font-medium"
-                      : "bg-[#4d4d4c] text-white hover:bg-[#5d5d5c]"
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
-          >
-            Next
-          </button>
-        </div>
-      )}
-      <div className="text-center mt-3 text-xs text-gray-500">
-        Page {currentPage} of {totalPages} • {gameHistoryData.length} records shown
-      </div>
-    </>
-  )}
-  {activeTab === "chart" && (
-    <>
-      <div className="p-2 rounded-t-lg">
-        <table className="table-fixed w-full text-left bg-[#333332] rounded-t-lg">
-          <thead>
-            <tr className="bg-gray-700 rounded-t-lg">
-              <th className="px-2 w-2/5 py-2 text-center text-white text-sm border-b rounded-tl-xl border-[#3a3947]">
-                Period
-              </th>
-              <th className="px-2 w-3/5 py-2 text-center text-white text-sm border-b rounded-tr-xl border-[#3a3947]">
-                Number
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {chartData.length > 0 ? (
-              chartData.map((row, index) => (
-                <tr key={index} className="border-b border-gray-700">
-                  <td className="px-2 py-2 text-gray-200 text-sm text-center">
+                <tr key={index} className="relative border-b border-gray-700">
+                  <td className="px-2 text-gray-200 text-sm py-2 text-center">
                     {row.periodId}
                   </td>
-                  <td className="px-2 py-2 text-center">
-                    <span
-                      className={`inline-flex items-center justify-center text-sm w-8 h-8 rounded-full text-white ${
-                        row.number === 0 || row.number === 5
-                          ? row.number === 0
-                            ? "bg-gradient-to-r from-red-500 to-violet-500"
-                            : "bg-gradient-to-r from-green-500 to-violet-500"
-                          : row.number % 2 === 0
-                            ? "bg-red-500"
-                            : "bg-green-500"
-                      }`}
-                    >
-                      {row.number}
-                    </span>
+                  <td className="px-2 py-4 text-xs relative">
+                    <div className="flex items-center justify-center space-x-1">
+                      {[...Array(10)].map((_, numIndex) => {
+                        let baseClass =
+                          "inline-flex items-center justify-center text-xs w-6 h-4 rounded-full text-white";
+                        let style = {};
+
+                        if (numIndex === tableRow.highlightedNumber) {
+                          if (numIndex === 0) {
+                            style.background =
+                              "linear-gradient(to right, #ef4444 50%, #8b5cf6 50%)";
+                          } else if (numIndex === 5) {
+                            style.background =
+                              "linear-gradient(to right, #22c55e 50%, #8b5cf6 50%)";
+                          } else {
+                            style.backgroundColor =
+                              numIndex % 2 === 0 ? "#ef4444" : "#22c55e";
+                          }
+                        } else {
+                          style.backgroundColor = "#444343";
+                          style.color = "#aaa";
+                        }
+
+                        return (
+                          <span
+                            key={numIndex}
+                            className={baseClass}
+                            style={style}
+                          >
+                            {numIndex}
+                          </span>
+                        );
+                      })}
+                      <span
+                        className={`inline-flex items-center rounded-full justify-center w-10 h-6 ml-1 border text-center ${
+                          tableRow.type === "B"
+                            ? "bg-yellow-600 text-white border-yellow-600"
+                            : tableRow.type === "S"
+                              ? "bg-[#5088d3] text-white border-[#5088d3]"
+                              : "border-gray-500 text-gray-500"
+                        }`}
+                      >
+                        {tableRow.type}
+                      </span>
+                    </div>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="2" className="px-2 py-4 text-center text-gray-200">
-                  No data available
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center mt-4 space-x-2">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
-          >
-            Previous
-          </button>
-
-          <div className="flex items-center space-x-1">
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pageNum = currentPage <= 3 ? i + 1 : currentPage - 2 + i;
-              if (pageNum > totalPages) return null;
-
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => handlePageChange(pageNum)}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    currentPage === pageNum
-                      ? "bg-[#d9ac4f] text-black font-medium"
-                      : "bg-[#4d4d4c] text-white hover:bg-[#5d5d5c]"
-                  }`}
-                >
-                  {pageNum}
-                </button>
               );
-            })}
-          </div>
-
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
-          >
-            Next
-          </button>
-        </div>
-      )}
-      <div className="text-center mt-3 text-xs text-gray-500">
-        Page {currentPage} of {totalPages} • {chartData.length} records shown
-      </div>
-    </>
-  )}
-  {activeTab === "myHistory" && (
-    <div className="bg-[#333332] ">
-      {isLoading ? (
-        <div className="text-center py-8 text-gray-400">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#d9ac4f] mx-auto mb-2"></div>
-          <p>Loading your betting history...</p>
-        </div>
-      ) : error ? (
-        <div className="text-center py-8 text-red-400">
-          <p>{error}</p>
-          <button
-            onClick={() => fetchUserBets(currentPage)}
-            className="mt-2 px-4 py-2 bg-[#d9ac4f] text-black rounded hover:bg-[#c49b45]"
-          >
-            Retry
-          </button>
-        </div>
-      ) : userBets.length === 0 ? (
-        <div className="text-center py-8 text-gray-400">
-          <p>No betting history found</p>
-          <p className="text-sm mt-1">
-            Your bets will appear here once you start playing
-          </p>
-        </div>
-      ) : (
-        <>
-          {userBets.map((bet, index) => {
-            // Function to determine the color based on bet selection
-            const getColorClass = (selection) => {
-              if (!selection) return 'bg-gray-500';
-              
-              const sel = selection.toString().toLowerCase();
-              if (sel.includes('green') || sel === 'g' || sel === '1' || sel === '3' || sel === '7' || sel === '9') {
-                return 'bg-green-500';
-              } else if (sel.includes('red') || sel === 'r' || sel === '2' || sel === '4' || sel === '6' || sel === '8') {
-                return 'bg-red-500';
-              } else if (sel.includes('violet') || sel === 'v' || sel === '0' || sel === '5') {
-                return 'bg-purple-500';
-              } else if (sel.includes('big') || sel === 'big') {
-                return 'bg-blue-500';
-              } else if (sel.includes('small') || sel === 'small') {
-                return 'bg-yellow-500';
-              }
-              return 'bg-gray-500';
-            };
-
-            return (
-              <div
-                key={bet.betId || index}
-                className=" rounded-md cursor-pointer bg-[#2a2a29] "
-                onClick={() =>
-                  setIsDetailsOpen(isDetailsOpen === index ? null : index)
-                }
+            })
+          ) : (
+            <tr>
+              <td
+                colSpan="2"
+                className="px-2 py-4 text-center text-gray-200"
               >
-                <div className="flex justify-between items-center p-3">
-                  <div className="flex items-center space-x-3">
-                    {/* Color Square Box */}
-                    <div className={`w-8 h-8 rounded ${getColorClass(bet.select)}`}></div>
-                    <div className="text-left">
-                      <p className="text-gray-200 text-sm font-medium">{bet.period}</p>
-                      <p className="text-gray-500 text-xs">{bet.orderTime}</p>
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-gray-400 text-xs">{bet.result || "Pending"}</p>
-                  </div>
-                  <div className="flex flex-col items-end space-y-1">
-                    <div
-                      className={`border text-xs rounded-md px-2 py-1 ${
-                        bet.status === "Won"
-                          ? "border-green-500 text-green-500"
-                          : bet.status === "Lost"
-                            ? "border-red-500 text-red-500"
-                            : "border-red-500 text-red-500"
-                      }`}
-                    >
-                      {bet.status === "Won" ? "Success" : "Failed"}
-                    </div>
-                    <p
-                      className={`font-medium text-sm ${
-                        bet.winLose?.startsWith("+")
-                          ? "text-green-500"
-                          : bet.winLose?.startsWith("-")
-                            ? "text-red-500"
-                            : "text-gray-400"
-                      }`}
-                    >
-                      {bet.winLose}
-                    </p>
+                No data available
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+    
+    
+  </>
+)}
+  {activeTab === "myHistory" && (
+  <div className="bg-[#333332] ">
+    {isLoading ? (
+      <div className="text-center py-8 text-gray-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#d9ac4f] mx-auto mb-2"></div>
+        <p>Loading your betting history...</p>
+      </div>
+    ) : error ? (
+      <div className="text-center py-8 text-red-400">
+        <p>{error}</p>
+        <button
+          onClick={() => fetchUserBets(currentPage)}
+          className="mt-2 px-4 py-2 bg-[#d9ac4f] text-black rounded hover:bg-[#c49b45]"
+        >
+          Retry
+        </button>
+      </div>
+    ) : userBets.length === 0 ? (
+      <div className="text-center py-8 text-gray-400">
+        <p>No betting history found</p>
+        <p className="text-sm mt-1">
+          Your bets will appear here once you start playing
+        </p>
+      </div>
+    ) : (
+      <>
+        {userBets.map((bet, index) => {
+          // Function to determine the color based on bet selection
+          const getColorClass = (selection) => {
+            if (!selection) return 'bg-gray-500';
+            
+            const sel = selection.toString().toLowerCase();
+            if (sel.includes('green') || sel === 'g' || sel === '1' || sel === '3' || sel === '7' || sel === '9') {
+              return 'bg-green-500';
+            } else if (sel.includes('red') || sel === 'r' || sel === '2' || sel === '4' || sel === '6' || sel === '8') {
+              return 'bg-red-500';
+            } else if (sel.includes('violet') || sel === 'v' || sel === '0' || sel === '5') {
+              return 'bg-purple-500';
+            } else if (sel.includes('big') || sel === 'big') {
+              return 'bg-blue-500';
+            } else if (sel.includes('small') || sel === 'small') {
+              return 'bg-yellow-500';
+            }
+            return 'bg-gray-500';
+          };
+
+          return (
+            <div
+              key={bet.betId || index}
+              className="rounded-md cursor-pointer bg-[#2a2a29]"
+              onClick={() =>
+                setIsDetailsOpen(isDetailsOpen === index ? null : index)
+              }
+            >
+              <div className="flex justify-between items-center p-3">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-8 h-8 rounded ${getColorClass(bet.select)}`}></div>
+                  <div className="text-left">
+                    <p className="text-gray-200 text-sm font-medium">{bet.period}</p>
+                    <p className="text-gray-500 text-xs">{bet.orderTime}</p>
                   </div>
                 </div>
-
-                {isDetailsOpen === index && (
-                  <div className="bg-[#2a2a2a] p-2 mx-1 mb-3 rounded-b-lg">
-                    <div className="mb-4">
-                      <h3 className="text-white text-lg font-medium mb-1">Details</h3>
-                    </div>
-                    <div className="space-y-3 text-sm">
-                      {[
-                        { label: "Order number", value: bet.orderNumber },
-                        { label: "Period", value: bet.period },
-                        { label: "Purchase amount", value: bet.amount },
-                        { label: "Quantity", value: bet.quantity },
-                        {
-                          label: "Amount after tax",
-                          value: bet.afterTax,
-                          valueClass: "text-[#ff5555]",
-                        },
-                        {
-                          label: "Tax",
-                          value: bet.tax,
-                          valueClass: "text-[#ff5555]",
-                        },
-                        {
-                          label: "Result",
-                          value: bet.result || "Pending",
-                          valueClass: "text-green-400",
-                        },
-                        { label: "Select", value: bet.select, valueClass: "text-[#ff5555]" },
-                        {
-                          label: "Status",
-                          value: bet.status === "Won" ? "Success" : "Failed",
-                          valueClass: bet.status === "Won" ? "text-green-400" : "text-[#ff5555]f",
-                        },
-                        {
-                          label: "Win/lose",
-                          value: bet.winLose,
-                          valueClass: bet.winLose?.startsWith("+")
-                            ? "text-green-400"
-                            : bet.winLose?.startsWith("-")
-                              ? "text-[#ff5555]"
-                              : "text-[#ff5555]",
-                        },
-                        { label: "Order time", value: bet.orderTime },
-                      ].map(({ label, value, valueClass = "text-gray-400" }) => (
-                        <div
-                          key={label}
-                          className="bg-[#4d4d4c] px-1.5 py-1.5 rounded-md flex justify-between items-center"
-                        >
-                          <span className="text-gray-300 text-sm">{label}</span>
-                          <span className={`${valueClass} text-sm font-normal`}>
-                            {value || "N/A"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                <div className="flex flex-col items-end space-y-1">
+                  <div
+                    className={`border text-xs rounded-md px-2 py-1 ${
+                      bet.status === "Won"
+                        ? "border-green-500 text-green-500"
+                        : bet.status === "Lost"
+                          ? "border-red-500 text-red-500"
+                          : "border-gray-500 text-gray-500"
+                    }`}
+                  >
+                    {bet.status === "Won" ? "Success" : bet.status === "Lost" ? "Failed" : "Pending"}
                   </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Pagination for My History */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center mt-4 space-x-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
-              >
-                Previous
-              </button>
-
-              <div className="flex items-center space-x-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pageNum = currentPage <= 3 ? i + 1 : currentPage - 2 + i;
-                  if (pageNum > totalPages) return null;
-
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        currentPage === pageNum
-                          ? "bg-[#d9ac4f] text-black font-medium"
-                          : "bg-[#4d4d4c] text-white hover:bg-[#5d5d5c]"
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
+                  <p
+                    className={`font-medium text-sm ${
+                      bet.winLose?.startsWith("+")
+                        ? "text-green-500"
+                        : bet.winLose?.startsWith("-")
+                          ? "text-red-500"
+                          : "text-gray-400"
+                    }`}
+                  >
+                    {bet.winLose}
+                  </p>
+                </div>
               </div>
 
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
-              >
-                Next
-              </button>
+              {isDetailsOpen === index && (
+                <div className="bg-[#2a2a2a] p-2 mx-1 mb-3 rounded-b-lg">
+                  <div className="mb-4">
+                    <h3 className="text-white text-lg font-medium mb-1">Details</h3>
+                  </div>
+                  <div className="space-y-3 text-sm">
+                    {[
+                      { label: "Order number", value: bet.orderNumber },
+                      { label: "Period", value: bet.period },
+                      { label: "Purchase amount", value: bet.amount },
+                      { label: "Quantity", value: bet.quantity },
+                      {
+                        label: "Amount after tax",
+                        value: bet.afterTax,
+                        valueClass: "text-[#ff5555]",
+                      },
+                      {
+                        label: "Tax",
+                        value: bet.tax,
+                        valueClass: "text-[#ff5555]",
+                      },
+                      {
+                        label: "Result",
+                        value: bet.result || "Pending",
+                        valueClass: "text-green-400",
+                      },
+                      { label: "Select", value: bet.select, valueClass: "text-[#ff5555]" },
+                      {
+                        label: "Status",
+                        value: bet.status === "Won" ? "Success" : bet.status === "Lost" ? "Failed" : "Pending",
+                        valueClass: bet.status === "Won" ? "text-green-400" : bet.status === "Lost" ? "text-[#ff5555]" : "text-gray-400",
+                      },
+                      {
+                        label: "Win/lose",
+                        value: bet.winLose,
+                        valueClass: bet.winLose?.startsWith("+")
+                          ? "text-green-400"
+                          : bet.winLose?.startsWith("-")
+                            ? "text-[#ff5555]"
+                            : "text-[#ff5555]",
+                      },
+                      { label: "Order time", value: bet.orderTime },
+                    ].map(({ label, value, valueClass = "text-gray-400" }) => (
+                      <div
+                        key={label}
+                        className="bg-[#4d4d4c] px-1.5 py-1.5 rounded-md flex justify-between items-center"
+                      >
+                        <span className="text-gray-300 text-sm">{label}</span>
+                        <span className={`${valueClass} text-sm font-normal`}>
+                          {value || "N/A"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </>
-      )}
-    </div>
-  )}
+          );
+        })}
+        {/* Pagination for My History */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center mt-4 space-x-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
+            >
+              Previous
+            </button>
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = currentPage <= 3 ? i + 1 : currentPage - 2 + i;
+                if (pageNum > totalPages) return null;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      currentPage === pageNum
+                        ? "bg-[#d9ac4f] text-black font-medium"
+                        : "bg-[#4d4d4c] text-white hover:bg-[#5d5d5c]"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 bg-[#4d4d4c] text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5d5d5c] transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </>
+    )}
+  </div>
+)}
+    
 
 </div>
 

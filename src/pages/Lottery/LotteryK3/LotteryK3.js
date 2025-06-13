@@ -137,8 +137,12 @@ const BettingModal = ({
   activeButton,
   buttonData,
   setError,
+  timeRemaining,
+  isFrozen,
+  setIsBettingModalOpen,
 }) => {
   const multiplierOptions = ["X1", "X5", "X10", "X20", "X50", "X100"];
+  const [showPreSalePopup, setShowPreSalePopup] = useState(false);
 
   const getDisplayAmount = () => {
     const baseAmount = calculateTotalBetAmount();
@@ -162,9 +166,16 @@ const BettingModal = ({
     setBetAmount(1);
     setQuantity(1);
     setSelectedMultiplier("X1");
+    setIsBettingModalOpen(false);
   };
 
   const handlePlaceBet = () => {
+    if (isFrozen) {
+      setError("Betting is disabled during the freeze period.");
+      handleClosePopup();
+      return;
+    }
+
     if (!checked) {
       alert("Please agree to the pre-sale rules");
       return;
@@ -218,204 +229,327 @@ const BettingModal = ({
     return redDigit !== greenValue;
   };
 
+  const numbersSelected = selectedOptions.filter((opt) => typeof opt === 'number' && opt >= 3 && opt <= 18);
+  const bigSmallSelected = selectedOptions.find((opt) => opt === "Big" || opt === "Small");
+  const oddEvenSelected = selectedOptions.find((opt) => opt === "Odd" || opt === "Even");
+
+  const getNumberBackgroundColor = (number) => {
+    const image = imageUrls.find((img) => img.number === number);
+    return image?.textColor === '#ff0000' ? 'bg-red-600' : 'bg-green-600';
+  };
+
   return (
-    shouldShowBettingModal() && (
-      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-[400px] bg-[#222222] text-white rounded-t-lg p-4 shadow-xl z-50">
-        {selectedOptions.some((option) => option >= 1 && option <= 6) && (
-          <div className="mb-2">
-            <p className="text-sm mb-1">
-              3 different numbers: {getCombinationCount(selectedOptions.filter((opt) => opt >= 1 && opt <= 6).length, 3)} bets
-            </p>
-            <div className="flex space-x-2">
-              {selectedOptions
-                .filter((option) => option >= 1 && option <= 6)
-                .map((option) => (
-                  <span
-                    key={option}
-                    className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
-                  >
-                    {option}
-                  </span>
-                ))}
+    <>
+      {shouldShowBettingModal() && (
+       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-[400px] bg-[#222222] text-white rounded-t-lg shadow-xl z-50 p-4">
+          {activeImgTab === "total" && (numbersSelected.length > 0 || bigSmallSelected || oddEvenSelected) && (
+            <div className="mb-4">
+              <p className="text-sm mb-2">Total sum:</p>
+              <div className="flex flex-col space-y-2">
+                {numbersSelected.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {numbersSelected.map((option, index) => (
+                      <span
+                        key={index}
+                        className={`${getNumberBackgroundColor(option)} px-3 py-1 rounded-full text-sm font-normal`}
+                      >
+                        {option}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {(bigSmallSelected || oddEvenSelected) && (
+                  <div className="flex flex-wrap gap-2">
+                    {bigSmallSelected && (
+                      <span className="bg-gradient-to-b from-[#FF827A] to-[#E93333] px-3 py-1 rounded text-sm font-medium">
+                        {bigSmallSelected}
+                      </span>
+                    )}
+                    {oddEvenSelected && (
+                      <span className="bg-blue-500 px-3 py-1 rounded text-sm font-medium">
+                        {oddEvenSelected}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {selectedOptions.includes("3 Continuous") && (
-          <div className="mb-2">
-            <p className="text-sm mb-1">3 continuous numbers: 1 bet</p>
-            <span className="bg-red-600 px-3 py-1 rounded text-sm font-medium">
-              3 continuous numbers : odds (8.64)
-            </span>
-          </div>
-        )}
-
-        {selectedOptions.some((option) => option >= 11 && option <= 16) &&
-          !selectedTwoSameNumbers.length &&
-          !selectedPair.red &&
-          !selectedPair.green && (
-            <div className="mb-2">
-              <p className="text-sm mb-1">
-                2 different numbers: {getCombinationCount(selectedOptions.filter((opt) => opt >= 11 && opt <= 16).length, 2)} bets
+          {activeImgTab === "different" && selectedOptions.some((option) => option >= 1 && option <= 6) && (
+            <div className="mb-4">
+              <p className="text-sm mb-2">
+                3 different numbers: {getCombinationCount(selectedOptions.filter((opt) => opt >= 1 && opt <= 6).length, 3)} bets
               </p>
               <div className="flex space-x-2">
                 {selectedOptions
-                  .filter((option) => option >= 11 && option <= 16)
+                  .filter((option) => option >= 1 && option <= 6)
                   .map((option) => (
                     <span
                       key={option}
                       className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
                     >
-                      {option - 10}
+                      {option}
                     </span>
                   ))}
               </div>
             </div>
           )}
 
-        {(selectedTwoSameNumbers.length > 0 ||
-          (selectedPair.red && selectedPair.green)) && (
-          <div className="mb-2">
-            <p className="text-sm mb-1">2 same numbers:</p>
-            <div className="flex space-x-2">
-              {selectedTwoSameNumbers.map((num) => (
-                <span
-                  key={num}
-                  className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
+          {activeImgTab === "different" && selectedOptions.includes("3 Continuous") && (
+            <div className="mb-4">
+              <p className="text-sm mb-2">3 continuous numbers: 1 bet</p>
+              <span className="bg-red-600 px-3 py-1 rounded text-sm font-medium">
+                3 continuous numbers : odds (8.64)
+              </span>
+            </div>
+          )}
+
+          {activeImgTab === "different" && selectedOptions.some((option) => option >= 11 && option <= 16) &&
+            !selectedTwoSameNumbers.length &&
+            !selectedPair.red &&
+            !selectedPair.green && (
+              <div className="mb-4">
+                <p className="text-sm mb-2">
+                  2 different numbers: {getCombinationCount(selectedOptions.filter((opt) => opt >= 11 && opt <= 16).length, 2)} bets
+                </p>
+                <div className="flex space-x-2">
+                  {selectedOptions
+                    .filter((option) => option >= 11 && option <= 16)
+                    .map((option) => (
+                      <span
+                        key={option}
+                        className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
+                      >
+                        {option - 10}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+
+          {(activeImgTab === "2same" && (selectedTwoSameNumbers.length > 0 ||
+            (selectedPair.red && selectedPair.green))) && (
+            <div className="mb-4">
+              <p className="text-sm mb-2">2 same numbers:</p>
+              <div className="flex space-x-2">
+                {selectedTwoSameNumbers.map((num) => (
+                  <span
+                    key={num}
+                    className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
+                  >
+                    {num}
+                  </span>
+                ))}
+                {selectedPair.red && selectedPair.green && (
+                  <span className="bg-red-600 px-3 py-1 rounded text-sm font-medium">
+                    {`${selectedPair.red}, ${selectedPair.green}`}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(activeImgTab === "3same" && (selectedThreeSameNumbers.length > 0 || selectedOptions.includes("Any 3"))) && (
+            <div className="mb-4">
+              <p className="text-sm mb-2">3 same numbers:</p>
+              <div className="flex flex-col space-y-2">
+                {selectedThreeSameNumbers.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedThreeSameNumbers.map((num) => (
+                      <span
+                        key={num}
+                        className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
+                      >
+                        {num}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {selectedOptions.includes("Any 3") && (
+                  <div className="flex gap-2">
+                    <span className="bg-red-600 px-3 py-1 rounded text-sm font-medium">
+                      Any 3 : odds (34.56)
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm">Balance</p>
+            <div className="flex gap-2">
+              {[1, 10, 100, 1000].map((value) => (
+                <button
+                  key={value}
+                  className={`px-3 py-1 rounded text-sm font-medium ${
+                    betAmount === value
+                      ? "bg-[#d6a439] text-black"
+                      : "bg-[#555555] text-gray-300"
+                  }`}
+                  onClick={() => setBetAmount(value)}
+                  disabled={isFrozen}
                 >
-                  {num}
-                </span>
+                  {value}
+                </button>
               ))}
-              {selectedPair.red && selectedPair.green && (
-                <span className="bg-red-600 px-3 py-1 rounded text-sm font-medium">
-                  {`${selectedPair.red}, ${selectedPair.green}`}
-                </span>
-              )}
             </div>
           </div>
-        )}
 
-        {(selectedThreeSameNumbers.length > 0 ||
-          selectedOptions.includes("Any 3")) && (
-          <div className="mb-2">
-            <p className="text-sm mb-1">3 same numbers:</p>
-            <div className="flex space-x-2">
-              {selectedThreeSameNumbers.map((num) => (
-                <span
-                  key={num}
-                  className="bg-purple-600 px-3 py-1 rounded text-sm font-medium"
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm">Quantity</p>
+              <div className="flex items-center gap-2">
+                <button
+                  className="bg-[#d6a439] text-black font-bold px-3 py-1 rounded"
+                  onClick={() => handleQuantityChange(-1)}
+                  disabled={isFrozen}
                 >
-                  {num}
-                </span>
-              ))}
-              {selectedOptions.includes("Any 3") && (
-                <span className="bg-red-600 px-3 py-1 rounded text-sm font-medium">
-                  Any 3 : odds (34.56)
-                </span>
-              )}
+                  -
+                </button>
+                <input
+                  type="text"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                  className="w-16 bg-neutral-800 text-center py-1 rounded text-sm text-white"
+                  disabled={isFrozen}
+                />
+                <button
+                  className="bg-[#d6a439] text-black font-bold px-3 py-1 rounded"
+                  onClick={() => handleQuantityChange(1)}
+                  disabled={isFrozen}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-between items-center">
+              <p className="text-sm">Multiplier</p>
+              <div className="flex gap-2">
+                {multiplierOptions.map((label) => (
+                  <button
+                    key={label}
+                    onClick={() => handleMultiplierClick(label)}
+                    className={`px-3 py-1 rounded text-sm font-medium ${
+                      selectedMultiplier === label
+                        ? "bg-[#d6a439] text-black"
+                        : "bg-[#555555] text-gray-300"
+                    }`}
+                    disabled={isFrozen}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        )}
 
-        <div className="flex justify-between items-center mb-4">
-          <p className="text-sm">Balance</p>
-          <div className="flex gap-2">
-            {[1, 10, 100, 1000].map((value) => (
-              <button
-                key={value}
-                className={`px-3 py-1 rounded text-sm font-medium ${
-                  betAmount === value
-                    ? "bg-[#d6a439] text-black"
-                    : "bg-[#555555] text-gray-300"
-                }`}
-                onClick={() => setBetAmount(value)}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative w-5 h-5 cursor-pointer" onClick={() => setChecked(!checked)}>
+              <img
+                src={agreeborder}
+                alt="checkbox border"
+                className="absolute inset-0 w-full h-full"
+              />
+              {checked && (
+                <img
+                  src={agree}
+                  alt="checkbox tick"
+                  className="absolute inset-0 w-full h-full"
+                />
+              )}
+            </div>
+            <span className="text-sm text-white">
+              I agree{" "}
+              <span
+                className="text-sm text-red-500 cursor-pointer"
+                onClick={() => setShowPreSalePopup(true)}
               >
-                {value}
+                Pre-sale rules
+              </span>
+            </span>
+          </div>
+
+          <div className="flex -mx-4 -mb-4">
+            <button
+              className="flex-1 bg-[#444] text-white py-3 text-sm font-medium"
+              onClick={handleClosePopup}
+            >
+              Cancel
+            </button>
+            <button
+              className="flex-1 bg-[#d6a439] text-[#8f5206] font-semibold py-3 text-sm"
+              onClick={handlePlaceBet}
+              disabled={isFrozen}
+            >
+              Total amount ₹{getDisplayAmount()}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPreSalePopup && (
+        <div className="fixed inset-0 bg-[#201d2b] bg-opacity-60 flex items-center justify-center z-[60]">
+          <div className="bg-[#201d2b] text-white rounded-3xl shadow-lg w-[90%] max-w-[360px] p-4 relative mt-[-5vh]">
+            <div className="bg-gradient-to-b from-[#FAE59F] to-[#C4933F] text-white text-center py-3 text-lg font-normal rounded-t-2xl w-full absolute top-0 left-0">
+              《Pre-sale rules》
+            </div>
+            <div className="text-sm text-white max-h-[45vh] overflow-y-auto p-3 mt-8 leading-[2.5]">
+              <p>
+                In order to protect the legitimate rights and interests of
+                users participating in the pre-sale and maintain the normal
+                operating order of the pre-sale, these rules are formulated in
+                accordance with relevant agreements and regulations.
+              </p>
+              <ol className="list-decimal pl-4">
+                <li>
+                  <strong>Pre-sale definition:</strong> Refers to a sales
+                  model in which a seller offers a bundle of a product or
+                  service collectively.
+                </li>
+                <li>
+                  <strong>Pre-sale process:</strong> Customers place an order,
+                  make a deposit, and the product is delivered at a specified
+                  date.
+                </li>
+                <li>
+                  <strong>Cancellation policy:</strong> Orders can be canceled
+                  before the final payment, but deposits may be non-refunded.
+                </li>
+                <li>
+                  <strong>Pre-sale system:</strong> This helps sellers
+                  organize product launches and ensures smooth transactions.
+                </li>
+                <li>
+                  <strong>Pricing:</strong> Pre-sale items have two components
+                  – deposit and final payment.
+                </li>
+                <li>
+                  <strong>Refunds:</strong> Refunds are only applicable under
+                  certain conditions.
+                </li>
+              </ol>
+            </div>
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={() => setShowPreSalePopup(false)}
+                className="bg-gradient-to-b from-[#FAE59F] to-[#C4933F] rounded-lg text-white px-8 py-2 font-normal shadow-md"
+              >
+                I know
               </button>
-            ))}
+            </div>
           </div>
         </div>
-
-        <div className="flex justify-between items-center mb-4">
-          <p className="text-sm">Quantity</p>
-          <div className="flex items-center gap-2">
-            <button
-              className="bg-[#d6a439] text-black font-bold px-3 py-1 rounded"
-              onClick={() => handleQuantityChange(-1)}
-            >
-              -
-            </button>
-            <input
-              type="text"
-              value={quantity}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-              className="w-16 bg-neutral-800 text-center py-1 rounded text-sm text-white"
-            />
-            <button
-              className="bg-[#d6a439] text-black font-bold px-3 py-1 rounded"
-              onClick={() => handleQuantityChange(1)}
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          {multiplierOptions.map((label) => (
-            <button
-              key={label}
-              onClick={() => handleMultiplierClick(label)}
-              className={`px-3 py-1 rounded text-sm font-medium ${
-                selectedMultiplier === label
-                  ? "bg-[#d6a439] text-black"
-                  : "bg-[#555] text-gray-300"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div
-          className="flex items-center gap-2 mb-4 cursor-pointer"
-          onClick={() => setChecked(!checked)}
-        >
-          <img
-            src={checked ? agree : agreeborder}
-            alt="Agreement Checkbox"
-            className="w-6 h-6"
-          />
-          <span className="text-sm text-white">I agree</span>
-          {/* <button
-            className="text-red-500 text-sm hover:underline"
-            onClick={() => setShowPreSalePopup(true)}
-          >
-            Pre-sale rules
-          </button> */}
-        </div>
-
-        <div className="flex w-full">
-          <button
-            className="flex-1 bg-[#444] text-white py-2 rounded-l text-sm"
-            onClick={handleClosePopup}
-          >
-            Cancel
-          </button>
-          <button
-            className="flex-1 bg-[#d6a439] text-[#8f5206] font-semibold py-2 rounded-r text-sm"
-            onClick={handlePlaceBet}
-          >
-            Total amount ₹{getDisplayAmount()}
-          </button>
-        </div>
-      </div>
-    )
+      )}
+    </>
   );
 
   function shouldShowBettingModal() {
+    if (isFrozen) return false;
     if (activeImgTab === "2same") {
       return selectedTwoSameNumbers.length > 0 || 
-             (selectedPair.red && selectedPair.green && isValidPair(selectedPair.red, selectedPair.green));
+            (selectedPair.red && selectedPair.green && isValidPair(selectedPair.red, selectedPair.green));
     } else if (activeImgTab === "3same") {
       return selectedThreeSameNumbers.length > 0 || selectedOptions.includes("Any 3");
     } else if (activeImgTab === "different") {
@@ -472,6 +606,8 @@ function LotteryK3() {
     periodId: "Loading...",
   });
   const [isPeriodTransitioning, setIsPeriodTransitioning] = useState(false);
+  const [isBettingModalOpen, setIsBettingModalOpen] = useState(false);
+  const [isFrozen, setIsFrozen] = useState(false);
 
   const {
     isConnected,
@@ -562,6 +698,23 @@ function LotteryK3() {
   ]);
 
   useEffect(() => {
+    const totalSeconds = timeRemaining.minutes * 60 + timeRemaining.seconds;
+    const newIsFrozen = totalSeconds <= 5 && totalSeconds > 0;
+    setIsFrozen(newIsFrozen);
+
+    if (newIsFrozen && isBettingModalOpen) {
+      setIsBettingModalOpen(false);
+      setSelectedOptions([]);
+      setSelectedTwoSameNumbers([]);
+      setSelectedPair({ red: null, green: null });
+      setSelectedThreeSameNumbers([]);
+      setBetAmount(1);
+      setQuantity(1);
+      setSelectedMultiplier("X1");
+    }
+  }, [timeRemaining, isBettingModalOpen]);
+
+  useEffect(() => {
     if (timeRemaining.minutes === 0 && timeRemaining.seconds === 0) {
       const currentId = parseInt(currentPeriod.periodId) || 0;
       const nextPeriodId = (currentId + 1).toString();
@@ -570,6 +723,22 @@ function LotteryK3() {
         ...prev,
         periodId: nextPeriodId,
       }));
+
+      // Fetch game history when period ends if on gameHistory tab
+      if (activeTab === "gameHistory") {
+        const duration = buttonData[activeButton].duration;
+        const fetchGameHistory = async () => {
+          setIsLoading(true);
+          const response = await fetchGameData(1, duration);
+          if (isMounted.current) {
+            setGameHistoryData(response.results);
+            setTotalPages(response.pagination.total_pages || 1);
+            setCurrentPage(1); // Reset to page 1 to show latest results
+            setIsLoading(false);
+          }
+        };
+        fetchGameHistory().catch(console.error);
+      }
 
       if (!isConnected) {
         const timer = setTimeout(() => {
@@ -582,7 +751,7 @@ function LotteryK3() {
         return () => clearTimeout(timer);
       }
     }
-  }, [timeRemaining.minutes, timeRemaining.seconds, activeButton, isConnected, currentPeriod.periodId]);
+  }, [timeRemaining.minutes, timeRemaining.seconds, activeButton, isConnected, currentPeriod.periodId, activeTab]);
 
   useEffect(() => {
     if (showSuccessPopup) {
@@ -691,7 +860,7 @@ function LotteryK3() {
     }
   }, [activeTab, currentPage, activeButton]);
 
-  const fetchUserBets = useCallback(async () => {
+  const fetchUserBets = async () => {
     if (!isMounted.current) return;
     setIsLoading(true);
     try {
@@ -708,13 +877,13 @@ function LotteryK3() {
         setIsLoading(false);
       }
     }
-  }, []);
+  };
 
   useEffect(() => {
     if (activeTab === "myHistory") {
       fetchUserBets();
     }
-  }, [activeTab, fetchUserBets]);
+  }, [activeTab]);
 
   useEffect(() => {
     const duration = buttonData[activeButton].duration;
@@ -748,6 +917,8 @@ function LotteryK3() {
   };
 
   const handleOptionClick = (option, type) => {
+    if (isFrozen) return;
+
     if (activeImgTab === "2same") {
       if (type === "twoSame" && [11, 22, 33, 44, 55, 66].includes(option)) {
         setSelectedTwoSameNumbers((prev) => {
@@ -758,6 +929,7 @@ function LotteryK3() {
               );
           setSelectedOptions(newSelected);
           setSelectedPair({ red: null, green: null });
+          setIsBettingModalOpen(newSelected.length > 0 || (selectedPair.red && selectedPair.green));
           return newSelected;
         });
       } else if (
@@ -776,6 +948,7 @@ function LotteryK3() {
             newPair.red && newPair.green ? [newPair.red, newPair.green] : null;
           setSelectedOptions(pair ? [pair] : []);
           setSelectedTwoSameNumbers([]);
+          setIsBettingModalOpen(!!pair);
           return newPair;
         });
       } else if (type === "pairGreen" && [1, 2, 3, 4, 5, 6].includes(option)) {
@@ -794,6 +967,7 @@ function LotteryK3() {
             newPair.red && newPair.green ? [newPair.red, newPair.green] : null;
           setSelectedOptions(pair ? [pair] : []);
           setSelectedTwoSameNumbers([]);
+          setIsBettingModalOpen(!!pair);
           return newPair;
         });
       }
@@ -808,13 +982,21 @@ function LotteryK3() {
             : [...prev, option].filter((num) =>
                 [111, 222, 333, 444, 555, 666].includes(num)
               );
-          setSelectedOptions(newSelected);
+          const updatedOptions = [
+            ...newSelected,
+            ...(selectedOptions.includes("Any 3") ? ["Any 3"] : []),
+          ];
+          setSelectedOptions(updatedOptions);
+          setIsBettingModalOpen(newSelected.length > 0 || selectedOptions.includes("Any 3"));
           return newSelected;
         });
       } else if (type === "anyThree") {
         const isCurrentlySelected = selectedOptions.includes("Any 3");
-        setSelectedOptions(isCurrentlySelected ? [] : ["Any 3"]);
-        setSelectedThreeSameNumbers([]);
+        const newSelectedOptions = isCurrentlySelected
+          ? selectedOptions.filter((opt) => opt !== "Any 3")
+          : [...selectedOptions, "Any 3"];
+        setSelectedOptions(newSelectedOptions);
+        setIsBettingModalOpen(newSelectedOptions.includes("Any 3") || selectedThreeSameNumbers.length > 0);
       }
     } else if (activeImgTab === "different") {
       const isSelected = selectedOptions.includes(option);
@@ -828,11 +1010,38 @@ function LotteryK3() {
       setSelectedTwoSameNumbers([]);
       setSelectedPair({ red: null, green: null });
       setSelectedThreeSameNumbers([]);
+      setIsBettingModalOpen(newSelectedOptions.length > 0);
     } else {
-      setSelectedOptions([option]);
+      let newSelectedOptions = [...selectedOptions];
+      const isSelected = selectedOptions.includes(option);
+
+      if (["Big", "Small"].includes(option)) {
+        newSelectedOptions = newSelectedOptions.filter(
+          (opt) => opt !== "Big" && opt !== "Small"
+        );
+        if (!isSelected) {
+          newSelectedOptions.push(option);
+        }
+      } else if (["Odd", "Even"].includes(option)) {
+        newSelectedOptions = newSelectedOptions.filter(
+          (opt) => opt !== "Odd" && opt !== "Even"
+        );
+        if (!isSelected) {
+          newSelectedOptions.push(option);
+        }
+      } else {
+        if (isSelected) {
+          newSelectedOptions = newSelectedOptions.filter((item) => item !== option);
+        } else {
+          newSelectedOptions.push(option);
+        }
+      }
+
+      setSelectedOptions(newSelectedOptions);
       setSelectedTwoSameNumbers([]);
       setSelectedPair({ red: null, green: null });
       setSelectedThreeSameNumbers([]);
+      setIsBettingModalOpen(newSelectedOptions.length > 0);
     }
   };
 
@@ -899,7 +1108,7 @@ function LotteryK3() {
     } else if (activeImgTab === "different") {
       return calculateDifferentBetAmount();
     } else {
-      return selectedOptions.length > 0 ? 1 : 0;
+      return selectedOptions.length > 0 ? selectedOptions.length : 0;
     }
   };
 
@@ -1068,348 +1277,353 @@ function LotteryK3() {
             </div>
           </div>
 
-          <FreezePopup timeRemaining={timeRemaining}>
-            <div className="relative bg-[#00b971] p-3 rounded-lg w-full">
-              <div className="relative bg-green-950 p-1 rounded-lg w-full overflow-hidden">
-                <div className="absolute left-[-12px] top-1/2 transform -translate-y-1/2 w-3 h-10 bg-[#00b971] rounded-l-md z-0"></div>
-                <div className="absolute top-0 left-0 h-full w-4 z-10">
-                  <div className="absolute top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-[20px] border-t-transparent border-b-[20px] border-b-transparent border-l-[16px] border-l-[#00b971]"></div>
+          <div className="relative bg-[#00b971] p-3 rounded-lg w-full">
+            <div className="relative bg-green-950 p-1 rounded-lg w-full overflow-hidden">
+              <div className="absolute left-[-12px] top-1/2 transform -translate-y-1/2 w-3 h-10 bg-[#00b971] rounded-l-md z-0"></div>
+              <div className="absolute top-0 left-0 h-full w-4 z-10">
+                <div className="absolute top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-[20px] border-t-transparent border-b-[20px] border-b-transparent border-l-[16px] border-l-[#00b971]"></div>
+              </div>
+              <div className="absolute top-0 right-0 h-full w-4 z-10">
+                <div className="absolute top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-[20px] border-t-transparent border-b-[20px] border-b-transparent border-r-[16px] border-r-[#00b971]"></div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex bg-gray-600 p-2 rounded justify-center">
+                  <img
+                    src={isConnected && currentResult?.dice_1 ? getDiceImage(currentResult.dice_1) : num1}
+                    alt="Dice 1"
+                    className="w-20 h-20"
+                  />
                 </div>
-                <div className="absolute top-0 right-0 h-full w-4 z-10">
-                  <div className="absolute top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-[20px] border-t-transparent border-b-[20px] border-b-transparent border-r-[16px] border-r-[#00b971]"></div>
+                <div className="flex bg-gray-600 p-2 rounded justify-center">
+                  <img
+                    src={isConnected && currentResult?.dice_2 ? getDiceImage(currentResult.dice_2) : num1}
+                    alt="Dice 2"
+                    className="w-20 h-20"
+                  />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="flex bg-gray-600 p-2 rounded justify-center">
-                    <img
-                      src={isConnected && currentResult?.dice_1 ? getDiceImage(currentResult.dice_1) : num1}
-                      alt="Dice 1"
-                      className="w-20 h-20"
-                    />
-                  </div>
-                  <div className="flex bg-gray-600 p-2 rounded justify-center">
-                    <img
-                      src={isConnected && currentResult?.dice_2 ? getDiceImage(currentResult.dice_2) : num1}
-                      alt="Dice 2"
-                      className="w-20 h-20"
-                    />
-                  </div>
-                  <div className="flex bg-gray-600 p-2 rounded justify-center">
-                    <img
-                      src={isConnected && currentResult?.dice_3 ? getDiceImage(currentResult.dice_3) : num1}
-                      alt="Dice 3"
-                      className="w-20 h-20"
-                    />
-                  </div>
+                <div className="flex bg-gray-600 p-2 rounded justify-center">
+                  <img
+                    src={isConnected && currentResult?.dice_3 ? getDiceImage(currentResult.dice_3) : num1}
+                    alt="Dice 3"
+                    className="w-20 h-20"
+                  />
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex justify-between mt-2 mb-2">
-              {[
-                { label: "Total", value: "total" },
-                { label: "2 same", value: "2same" },
-                { label: "3 same", value: "3same" },
-                { label: "Different", value: "different" },
-              ].map((tab, index) => {
-                const isActive = activeImgTab === tab.value;
-                return (
-                  <button
-                    key={index}
-                    className={`flex-1 px-4 py-3 text-sm font-medium text-center rounded-t-md ${
-                      isActive
-                        ? "bg-[#d9ac4f] text-[#8f5206]"
-                        : "bg-[#2d2d2d] text-[#a8a5a1]"
-                    } focus:outline-none`}
-                    onClick={() => setActiveImgTab(tab.value)}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </FreezePopup>
-
-          {activeImgTab === "total" && (
-            <div className="grid grid-cols-4 gap-4 ml-3">
-              {imageUrls.map((image, index) => (
-                <div key={index} className="flex flex-col items-center mt-4 relative w-14 h-14">
-                  <img
-                    src={image.url}
-                    alt={`Ball ${image.number}`}
-                    className="w-14 h-14 cursor-pointer"
-                    onClick={() => handleOptionClick(image.number)}
-                  />
-                  <span
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-2xl font-bold"
-                    style={{ color: image.textColor }}
-                  >
-                    {image.number}
-                  </span>
-                  <span className="text-xs text-white mt-1" style={{ color: "#a8a5a1" }}>{image.description}</span>
-                </div>
-              ))}
-              <div className="col-span-4 flex justify-between text-xs mb-2 mt-4">
-                {["Big 1.98", "Small 1.98", "Odd 1.98", "Even 1.98"].map((label, idx) => {
-                  const commonClasses =
-                    "text-white px-7 py-2 rounded-md hover:opacity-90 text-center cursor-pointer";
-                  const gradientStyle =
-                    idx === 0
-                      ? {
-                          background:
-                            "-webkit-linear-gradient(top, #FF827A 0%, #E93333 68.18%)",
-                        }
-                      : {};
-                  const fallbackBg = [
-                    "",
-                    "bg-[#00b971]",
-                    "bg-blue-500",
-                    "bg-yellow-500",
-                  ];
+          <FreezePopup timeRemaining={timeRemaining}>
+            <div className="mt-2 mb-2">
+              <div className="flex justify-between mb-2">
+                {[
+                  { label: "Total", value: "total" },
+                  { label: "2 same", value: "2same" },
+                  { label: "3 same", value: "3same" },
+                  { label: "Different", value: "different" },
+                ].map((tab, index) => {
+                  const isActive = activeImgTab === tab.value;
                   return (
                     <button
-                      key={idx}
-                      className={`${commonClasses} ${idx !== 0 ? fallbackBg[idx] : ""}`}
-                      style={gradientStyle}
-                      onClick={() => handleOptionClick(label.split(" ")[0])}
+                      key={index}
+                      className={`flex-1 px-4 py-3 text-sm font-medium text-center rounded-t-md ${
+                        isActive
+                          ? "bg-[#d9ac4f] text-[#8f5206]"
+                          : "bg-[#2d2d2d] text-[#a8a5a1]"
+                      } focus:outline-none`}
+                      onClick={() => setActiveImgTab(tab.value)}
                     >
-                      {label.split(" ").map((word, i) => (
-                        <span key={i} className="block">
-                          {word}
-                        </span>
-                      ))}
+                      {tab.label}
                     </button>
                   );
                 })}
               </div>
-            </div>
-          )}
 
-          {activeImgTab === "2same" && (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>2 matching numbers: odds (13.83)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowTwoSamePopup(true)}
-                />
-              </div>
-              <div className="flex justify-center text-sm space-x-2">
-                {[11, 22, 33, 44, 55, 66].map((value, index) => (
-                  <div
-                    key={index}
-                    className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
-                      selectedTwoSameNumbers.includes(value)
-                        ? "bg-opacity-70"
-                        : ""
-                    }`}
-                    onClick={() => handleOptionClick(value, "twoSame")}
-                  >
-                    <span className="text-lg">{value}</span>
-                    {selectedTwoSameNumbers.includes(value) && (
-                      <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                        ✔
+              {activeImgTab === "total" && (
+                <div className="grid grid-cols-4 gap-4 ml-3">
+                  {imageUrls.map((image, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col items-center mt-4 relative w-14 h-14 cursor-pointer"
+                      onClick={() => handleOptionClick(image.number)}
+                    >
+                      <img
+                        src={image.url}
+                        alt={`Ball ${image.number}`}
+                        className="w-14 h-14"
+                      />
+                      <span
+                        className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-2xl font-bold pointer-events-none"
+                        style={{ color: image.textColor }}
+                      >
+                        {image.number}
                       </span>
-                    )}
+                      <span className="text-xs text-white mt-1" style={{ color: "#a8a5a1" }}>{image.description}</span>
+                    </div>
+                  ))}
+                  <div className="col-span-4 flex justify-between text-xs mb-2 mt-4">
+                    {["Big 1.98", "Small 1.98", "Odd 1.98", "Even 1.98"].map((label, idx) => {
+                      const commonClasses =
+                        "text-white px-7 py-2 rounded-md hover:opacity-90 text-center cursor-pointer";
+                      const gradientStyle =
+                        idx === 0
+                          ? {
+                              background:
+                                "-webkit-linear-gradient(top, #FF827A 0%, #E93333 68.18%)",
+                            }
+                          : {};
+                      const fallbackBg = [
+                        "",
+                        "bg-[#00b971]",
+                        "bg-blue-500",
+                        "bg-yellow-500",
+                      ];
+                      return (
+                        <button
+                          key={idx}
+                          className={`${commonClasses} ${idx !== 0 ? fallbackBg[idx] : ""}`}
+                          style={gradientStyle}
+                          onClick={() => handleOptionClick(label.split(" ")[0])}
+                        >
+                          {label.split(" ").map((word, i) => (
+                            <span key={i} className="block">
+                              {word}
+                            </span>
+                          ))}
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>A pair of unique numbers: odds (69.12)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowTwoSamePopup(true)}
-                />
-              </div>
-              <div className="flex justify-center space-x-2">
-                {[11, 22, 33, 44, 55, 66].map((value, index) => (
-                  <div
-                    key={index}
-                    className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-red-500 rounded-md shadow cursor-pointer relative ${
-                      selectedPair.red === value ? "bg-opacity-70" : ""
-                    }`}
-                    onClick={() => handleOptionClick(value, "pairRed")}
-                  >
-                    <span className="text-lg">{value}</span>
-                    {selectedPair.red === value && (
-                      <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                        ✔
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-center space-x-2">
-                {[1, 2, 3, 4, 5, 6].map((value, index) => (
-                  <div
-                    key={index}
-                    className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-green-600 rounded-md shadow cursor-pointer relative ${
-                      selectedPair.green === value ? "bg-opacity-70" : ""
-                    }`}
-                    onClick={() => handleOptionClick(value, "pairGreen")}
-                  >
-                    <span className="text-lg">{value}</span>
-                    {selectedPair.green === value && (
-                      <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                        ✔
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {activeImgTab === "3same" && (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>3 of the same number: odds (207.36)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowThreeSamePopup(true)}
-                />
-              </div>
-              <div className="flex justify-center space-x-2">
-                {[111, 222, 333, 444, 555, 666].map((value, index) => (
-                  <div
-                    key={index}
-                    className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
-                      selectedThreeSameNumbers.includes(value)
-                        ? "bg-opacity-70"
-                        : ""
-                    }`}
-                    onClick={() => handleOptionClick(value, "threeSame")}
-                  >
-                    <span className="text-lg">{value}</span>
-                    {selectedThreeSameNumbers.includes(value) && (
-                      <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                        ✔
-                      </span>
-                    )}
+              {activeImgTab === "2same" && (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>2 matching numbers: odds (13.83)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowTwoSamePopup(true)}
+                    />
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>Any 3 of the same number: odds (34.56)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowThreeSamePopup(true)}
-                />
-              </div>
-              <div className="flex justify-center">
-                <button
-                  className={`w-full bg-red-600 text-white text-sm font-semibold py-3 rounded-md shadow cursor-pointer ${
-                    selectedOptions.includes("Any 3") ? "bg-opacity-70" : ""
-                  }`}
-                  onClick={() => handleOptionClick("Any 3", "anyThree")}
-                >
-                  Any 3 of the same number: odds
-                  {selectedOptions.includes("Any 3") && (
-                    <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                      ✔
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+                  <div className="flex justify-center text-sm space-x-2">
+                    {[11, 22, 33, 44, 55, 66].map((value, index) => (
+                      <div
+                        key={index}
+                        className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
+                          selectedTwoSameNumbers.includes(value)
+                            ? "bg-opacity-70"
+                            : ""
+                        }`}
+                        onClick={() => handleOptionClick(value, "twoSame")}
+                      >
+                        <span className="text-lg">{value}</span>
+                        {selectedTwoSameNumbers.includes(value) && (
+                          <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                            ✔
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>A pair of unique numbers: odds (69.12)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowTwoSamePopup(true)}
+                    />
+                  </div>
+                  <div className="flex justify-center space-x-2">
+                    {[11, 22, 33, 44, 55, 66].map((value, index) => (
+                      <div
+                        key={index}
+                        className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-red-500 rounded-md shadow cursor-pointer relative ${
+                          selectedPair.red === value ? "bg-opacity-70" : ""
+                        }`}
+                        onClick={() => handleOptionClick(value, "pairRed")}
+                      >
+                        <span className="text-lg">{value}</span>
+                        {selectedPair.red === value && (
+                          <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                            ✔
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-center space-x-2">
+                    {[1, 2, 3, 4, 5, 6].map((value, index) => (
+                      <div
+                        key={index}
+                        className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-green-600 rounded-md shadow cursor-pointer relative ${
+                          selectedPair.green === value ? "bg-opacity-70" : ""
+                        }`}
+                        onClick={() => handleOptionClick(value, "pairGreen")}
+                      >
+                        <span className="text-lg">{value}</span>
+                        {selectedPair.green === value && (
+                          <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                            ✔
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {activeImgTab === "different" && (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>3 different numbers: odds (34.56)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowDifferentPopup(true)}
-                />
-              </div>
-              <div className="flex justify-center space-x-2">
-                {[1, 2, 3, 4, 5, 6].map((value, index) => (
-                  <div
-                    key={index}
-                    className={`w-12 h-10 flex justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
-                      selectedOptions.includes(value) ? "bg-opacity-70" : ""
-                    }`}
-                    onClick={() => handleOptionClick(value, "threeDifferent")}
-                  >
-                    {value}
-                    {selectedOptions.includes(value) && (
-                      <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                        ✔
-                      </span>
-                    )}
+              {activeImgTab === "3same" && (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>3 of the same number: odds (207.36)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowThreeSamePopup(true)}
+                    />
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>3 continuous numbers: odds (8.64)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowDifferentPopup(true)}
-                />
-              </div>
-              <div className="flex justify-center">
-                <button
-                  className={`w-full bg-red-600 text-white text-sm font-semibold py-3 rounded-md shadow cursor-pointer ${
-                    selectedOptions.includes("3 Continuous") ? "bg-opacity-70" : ""
-                  }`}
-                  onClick={() => handleOptionClick("3 Continuous", "continuous")}
-                >
-                  3 continuous numbers
-                  {selectedOptions.includes("3 Continuous") && (
-                    <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                      ✔
-                    </span>
-                  )}
-                </button>
-              </div>
-              <div className="flex items-center space-x-2 text-sm font-medium text-white">
-                <span>2 different numbers: odds (6.91)</span>
-                <img
-                  src={mark}
-                  alt="mark"
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setShowDifferentPopup(true)}
-                />
-              </div>
-              <div className="flex justify-center space-x-2">
-                {[
-                  { value: 11, label: "1" },
-                  { value: 12, label: "2" },
-                  { value: 13, label: "3" },
-                  { value: 14, label: "4" },
-                  { value: 15, label: "5" },
-                  { value: 16, label: "6" },
-                ].map(({ value, label }, index) => (
-                  <div
-                    key={index}
-                    className={`w-12 h-10 flex justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
-                      selectedOptions.includes(value) ? "bg-opacity-70" : ""
-                    }`}
-                    onClick={() => handleOptionClick(value, "twoDifferent")}
-                  >
-                    {label}
-                    {selectedOptions.includes(value) && (
-                      <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
-                        ✔
-                      </span>
-                    )}
+                  <div className="flex justify-center space-x-2">
+                    {[111, 222, 333, 444, 555, 666].map((value, index) => (
+                      <div
+                        key={index}
+                        className={`w-14 h-12 flex flex-col justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
+                          selectedThreeSameNumbers.includes(value)
+                            ? "bg-opacity-70"
+                            : ""
+                        }`}
+                        onClick={() => handleOptionClick(value, "threeSame")}
+                      >
+                        <span className="text-lg">{value}</span>
+                        {selectedThreeSameNumbers.includes(value) && (
+                          <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                            ✔
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>Any 3 of the same number: odds (34.56)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowThreeSamePopup(true)}
+                    />
+                  </div>
+                  <div className="flex justify-center">
+                    <button
+                      className={`w-full bg-red-600 text-white text-sm font-semibold py-3 rounded-md shadow cursor-pointer ${
+                        selectedOptions.includes("Any 3") ? "bg-opacity-70" : ""
+                      }`}
+                      onClick={() => handleOptionClick("Any 3", "anyThree")}
+                    >
+                      Any 3 of the same number: odds
+                      {selectedOptions.includes("Any 3") && (
+                        <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                          ✔
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeImgTab === "different" && (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>3 different numbers: odds (34.56)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowDifferentPopup(true)}
+                    />
+                  </div>
+                  <div className="flex justify-center space-x-2">
+                    {[1, 2, 3, 4, 5, 6].map((value, index) => (
+                      <div
+                        key={index}
+                        className={`w-12 h-10 flex justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
+                          selectedOptions.includes(value) ? "bg-opacity-70" : ""
+                        }`}
+                        onClick={() => handleOptionClick(value, "threeDifferent")}
+                      >
+                        {value}
+                        {selectedOptions.includes(value) && (
+                          <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                            ✔
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>3 continuous numbers: odds (8.64)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowDifferentPopup(true)}
+                    />
+                  </div>
+                  <div className="flex justify-center">
+                    <button
+                      className={`w-full bg-red-600 text-white text-sm font-semibold py-3 rounded-md shadow cursor-pointer ${
+                        selectedOptions.includes("3 Continuous") ? "bg-opacity-70" : ""
+                      }`}
+                      onClick={() => handleOptionClick("3 Continuous", "continuous")}
+                    >
+                      3 continuous numbers
+                      {selectedOptions.includes("3 Continuous") && (
+                        <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                          ✔
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm font-medium text-white">
+                    <span>2 different numbers: odds (6.91)</span>
+                    <img
+                      src={mark}
+                      alt="mark"
+                      className="h-5 w-5 cursor-pointer"
+                      onClick={() => setShowDifferentPopup(true)}
+                    />
+                  </div>
+                  <div className="flex justify-center space-x-2">
+                    {[
+                      { value: 11, label: "1" },
+                      { value: 12, label: "2" },
+                      { value: 13, label: "3" },
+                      { value: 14, label: "4" },
+                      { value: 15, label: "5" },
+                      { value: 16, label: "6" },
+                    ].map(({ value, label }, index) => (
+                      <div
+                        key={index}
+                        className={`w-12 h-10 flex justify-center items-center text-white bg-purple-600 rounded-md shadow cursor-pointer relative ${
+                          selectedOptions.includes(value) ? "bg-opacity-70" : ""
+                        }`}
+                        onClick={() => handleOptionClick(value, "twoDifferent")}
+                      >
+                        {label}
+                        {selectedOptions.includes(value) && (
+                          <span className="absolute bottom-1 right-1 flex items-center justify-center w-4 h-4 bg-white rounded-full text-cyan-400 text-xs">
+                            ✔
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </FreezePopup>
         </div>
 
         <BettingModal
@@ -1441,6 +1655,9 @@ function LotteryK3() {
           activeButton={activeButton}
           buttonData={buttonData}
           setError={setError}
+          timeRemaining={timeRemaining}
+          isFrozen={isFrozen}
+          setIsBettingModalOpen={setIsBettingModalOpen}
         />
 
         {showSuccessPopup && (
@@ -1690,126 +1907,137 @@ function LotteryK3() {
           )}
 
           {activeTab === "chart" && (
-            <div>
-              <table className="table-auto bg-[#3f3f3e] rounded-lg w-full text-left">
-                <thead>
-                  <tr className="bg-[#3a3947] text-white rounded-lg">
-                    <th className="px-2 py-2 text-center">Period</th>
-                    <th className="px-2 py-2 text-center">Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {chartData.length > 0 ? (
-                    chartData.map((entry, index) => (
-                      <tr key={index} className="bg-[#3f3f3e]">
-                        <td className="px-2 text-[#f5f3f0] text-sm py-2 text-center">
-                          {entry.periodId}
-                        </td>
-                        <td className="px-2 py-2 text-sm text-center">
-                          <div className="flex items-center justify-center space-x-2">
-                            <img
-                              src={diceImages[entry.dice1] || diceImages[1]}
-                              alt={`Dice ${entry.dice1}`}
-                              className="w-6 h-6"
-                            />
-                            <img
-                              src={diceImages[entry.dice2] || diceImages[1]}
-                              alt={`Dice ${entry.dice2}`}
-                              className="w-6 h-6"
-                            />
-                            <img
-                              src={diceImages[entry.dice3] || diceImages[1]}
-                              alt={`Dice ${entry.dice3}`}
-                              className="w-6 h-6"
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="2" className="px-2 py-2 text-sm text-[#f5f3f0] text-center">
-                        No data available
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+  <div>
+    <table className="table-auto bg-[#3f3f3e] rounded-lg w-full text-left">
+      <thead>
+        <tr className="bg-[#3a3947] text-white rounded-lg">
+          <th className="px-2 py-2 text-center text-sm">Period</th>
+          <th className="px-2 py-2 text-center text-sm">Result</th>
+          <th className="px-2 py-2 text-center text-sm">Number</th>
+        </tr>
+      </thead>
+      <tbody>
+        {chartData.length > 0 ? (
+          chartData.map((entry, index) => {
+            const diceValues = [entry.dice1, entry.dice2, entry.dice3];
+            const uniqueValues = new Set(diceValues);
+            const numberDescription =
+              uniqueValues.size === 1
+                ? "All same numbers"
+                : uniqueValues.size === 2
+                ? "2 same numbers"
+                : "3 different numbers";
+            return (
+              <tr key={index} className="bg-[#3f3f3e]">
+                <td className="px-2 text-[#f5f3f0] text-sm py-2 text-center">
+                  {entry.periodId}
+                </td>
+                <td className="px-2 py-2 text-sm text-center">
+                  <div className="flex items-center justify-center space-x-2">
+                    {diceValues.map((value, idx) => (
+                      <div
+                        key={idx}
+                        className="w-6 h-6 flex items-center justify-center"
+                      >
+                        <img
+                          src={diceImages[value] || diceImages[1]}
+                          alt={`Dice ${value}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-2 py-2 text-sm text-[#f5f3f0] text-center whitespace-nowrap">
+                  {numberDescription}
+                </td>
+              </tr>
+            );
+          })
+        ) : (
+          <tr>
+            <td colSpan="3" className="px-2 py-2 text-sm text-[#f5f3f0] text-center">
+              {isLoading ? "Loading..." : "No data available"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+)}
 
-          {activeTab === "myHistory" && (
-            <div className="p-4 mb-4 text-right">
-              {historyData.length > 0 ? (
-                historyData.map((history, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-start border-b pb-4 mb-4"
-                  >
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-[#00b971] rounded-md mb-2 mr-3"></div>
+            {activeTab === "myHistory" && (
+              <div className="p-4 mb-4 text-right">
+                {historyData.length > 0 ? (
+                  historyData.map((history, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-start border-b pb-4 mb-4"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-12 h-12 bg-[#00b971] rounded-md mb-2 mr-3"></div>
+                        <div>
+                          <p className="text-gray-700">{history.id}</p>
+                          <p className="text-gray-500 text-sm">
+                            Date: {history.date || "N/A"}
+                          </p>
+                          <p className="text-gray-500 text-sm">
+                            Time: {history.time || "N/A"}
+                          </p>
+                        </div>
+                      </div>
                       <div>
-                        <p className="text-gray-700">{history.id}</p>
-                        <p className="text-gray-500 text-sm">
-                          Date: {history.date || "N/A"}
+                        <p className="text-[#00b971] mt-2 border text-right rounded text-sm px-2 border-[#00b971]">
+                          {history.detail || "Detail"}
                         </p>
-                        <p className="text-gray-500 text-sm">
-                          Time: {history.time || "N/A"}
+                        <p className="text-[#00b971] mt-2 border rounded text-sm px-2 border-[#00b971]">
+                          {history.status || "Succeed"}
+                        </p>
+                        <p className="text-black font-medium">
+                          {history.amount || "$0"}
                         </p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-[#00b971] mt-2 border text-right rounded text-sm px-2 border-[#00b971]">
-                        {history.detail || "Detail"}
-                      </p>
-                      <p className="text-[#00b971] mt-2 border rounded text-sm px-2 border-[#00b971]">
-                        {history.status || "Succeed"}
-                      </p>
-                      <p className="text-black font-medium">
-                        {history.amount || "$0"}
-                      </p>
+                  ))
+                ) : (
+                  <div className="text-center bg-[#4d4d4c]">
+                    <div className="flex flex-col bg-[#4d4d4c] items-center justify-center">
+                      <img
+                        src={empty}
+                        alt="No Data"
+                        className="w-64 h-60 object-contain"
+                      />
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center bg-[#4d4d4c]">
-                  <div className="flex flex-col bg-[#4d4d4c] items-center justify-center">
-                    <img
-                      src={empty}
-                      alt="No Data"
-                      className="w-64 h-60 object-contain"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                )}
+              </div>
+            )}
+          </div>
 
-        <div className="text-center mb-0 w-full mt-2">
-          <div className="bg-[rgb(77,77,76)] bg-opacity-40 rounded-xl shadow-lg p-4 flex items-center justify-center">
-            <button
-              className="p-3 text-[#a8a5a1] bg-[#6f7381] rounded-lg disabled:opacity-50"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <IoIosArrowBack className="w-5 h-5" />
-            </button>
-            <span className="px-8 text-sm text-[#a8a5a1] font-semibold">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              className="p-3 text-[#8f5206] bg-[#d9ac4f] rounded-lg disabled:opacity-50"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              <IoIosArrowForward />
-            </button>
+          <div className="text-center mb-0 w-full mt-2">
+            <div className="bg-[rgb(77,77,76)] bg-opacity-40 rounded-xl shadow-lg p-4 flex items-center justify-center">
+              <button
+                className="p-3 text-[#a8a5a1] bg-[#6f7381] rounded-lg disabled:opacity-50"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <IoIosArrowBack className="w-5 h-5" />
+              </button>
+              <span className="px-8 text-sm text-[#a8a5a1] font-semibold">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                className="p-3 text-[#8f5206] bg-[#d9ac4f] rounded-lg disabled:opacity-50"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <IoIosArrowForward />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-export default LotteryK3;
+  export default LotteryK3;
