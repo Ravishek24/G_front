@@ -2,7 +2,7 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// Use CORS proxy for development, direct URL for production
+// Use the full API URL
 const BASE_URL = "https://strike.atsproduct.in";
 
 // Helper function to store token
@@ -106,9 +106,9 @@ export const loginUser = createAsyncThunk(
         timeout: 30000,
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          'Accept': 'application/json'
         },
-        withCredentials: false,
+        withCredentials: false
       });
       
       console.log("Login response:", response.data);
@@ -150,7 +150,6 @@ export const loginUser = createAsyncThunk(
         errorMessage = "Network error. Please check your internet connection and try again.";
       } else if (error.response?.status === 401) {
         errorMessage = "Invalid credentials. Please check your phone number/email and password.";
-        // Don't redirect here since this is expected for wrong credentials
       } else if (error.response?.status === 403) {
         errorMessage = "Access forbidden. Please contact support.";
         redirectToLogin();
