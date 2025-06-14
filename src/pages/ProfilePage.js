@@ -224,9 +224,10 @@ function ProfilePage() {
                   <p className="text-[#f5f3f0] text-xs sm:text-sm font-semibold truncate">
                     Transaction
                   </p>
-                  <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium truncate">
-                    My transaction history
-                  </p>
+                <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium leading-tight">
+        My transaction history
+      </p>
+             
                 </div>
               </Link>
 
@@ -251,12 +252,12 @@ function ProfilePage() {
                 to="/withdraw-history"
                 className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[64px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
               >
-                <img src={withdrawHistory} alt="Withdraw Icon" className="w-9 h-9 mr-3 flex-shrink-0" />
+                <img src={withdrawHistory} alt="Withdraw Icon" className="w-7 h-7 mr-3 flex-shrink-0" />
                 <div className="flex flex-col min-w-0">
                   <p className="text-[#f5f3f0] text-xs sm:text-sm font-semibold truncate">
                     Withdraw
                   </p>
-                  <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium truncate">
+     <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium leading-tight">
                     My withdraw history
                   </p>
                 </div>
