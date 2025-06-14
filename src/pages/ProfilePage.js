@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState , useEffect} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { logout } from "../redux/Slice/loginSlice"; // Import logout action
@@ -31,7 +31,7 @@ import vip from "../Assets/vip/vip1.png"
 function ProfilePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
+  
   // Add state for controlling the logout modal
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -45,19 +45,19 @@ function ProfilePage() {
   // Handle confirm logout
   const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
-
+    
     try {
       // Dispatch logout action to clear Redux state and localStorage
       dispatch(logout());
-
+      
       // Close the modal
       setShowLogoutModal(false);
-
+      
       console.log("User logged out successfully");
-
+      
       // Navigate to login page
       navigate("/login", { replace: true });
-
+      
     } catch (error) {
       console.error("Error during logout:", error);
       // Even if there's an error, we should still logout the user
@@ -68,8 +68,8 @@ function ProfilePage() {
     }
   };
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+      window.scrollTo(0, 0);
+    }, []);
 
   // Handle cancel logout
   const handleCancelLogout = () => {
@@ -81,7 +81,7 @@ function ProfilePage() {
       {/* Main content wrapper with max-width matching Wallet page */}
       <div className="w-full max-w-md mx-auto">
         {/* Golden background header */}
-        <div
+        <div 
           className="w-full relative"
           style={{
             background: "linear-gradient(90deg, #FAE59F 0%, #C4933F 100%)",
@@ -103,9 +103,9 @@ function ProfilePage() {
               <div className="ml-4 max-w-[calc(100%-7rem)]">
                 <div className="flex items-center">
                   <h2 className="text-xl font-normal text-white truncate">MEMBERNGHEGGCK</h2>
-                  <img
-                    src={vip}
-                    alt="VIP Badge"
+                  <img 
+                    src={vip} 
+                    alt="VIP Badge" 
                     className="h-8 ml-2 flex-shrink-0"
                   />
                 </div>
@@ -128,7 +128,7 @@ function ProfilePage() {
             <div className="bg-[#4d4d4c] rounded-lg shadow-lg p-4">
               <div className="text-gray-400 text-lg font-normal">Total balance</div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2"> 
                   <div className="text-white text-xl font-bold">₹292672346792.32</div>
                   <button className="text-white">
                     <img src={refreshicon} alt="refresh" className="w-5 h-5" />
@@ -136,7 +136,7 @@ function ProfilePage() {
                 </div>
               </div>
 
-
+              
               {/* Quick action buttons */}
               <div className="grid grid-cols-4 gap-4 mt-4">
                 <Link to="/wallet" className="flex flex-col items-center">
@@ -145,21 +145,21 @@ function ProfilePage() {
                   </div>
                   <p className="text-white text-lg ">Wallet</p>
                 </Link>
-
+                
                 <Link to="/deposit" className="flex flex-col items-center">
                   <div className="w-12 h-12 flex items-center justify-center">
                     <img src={rechargeIcon} alt="Deposit" className="w-8 h-8" />
                   </div>
                   <p className="text-white text-lg ">Deposit</p>
                 </Link>
-
+                
                 <Link to="/withdraw" className="flex flex-col items-center">
                   <div className="w-12 h-12 flex items-center justify-center">
                     <img src={widthdraw} alt="Withdraw" className="w-8 h-8" />
                   </div>
                   <p className="text-white text-lg ">Withdraw</p>
                 </Link>
-
+                
                 <Link to="/vipprofile" className="flex flex-col items-center">
                   <div className="w-12 h-12 flex items-center justify-center">
                     <img src={vipiconup} alt="VIP" className="w-8 h-8" />
@@ -195,62 +195,71 @@ function ProfilePage() {
                 </div>
               </div>
             </Link>
-
-
+          
+                    
             {/* 2x2 grid layout */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-              {/* Game History */}
-              <Link
-                to="/gamehistoryProfile"
-                className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-              >
-                <img src={bet} alt="Game History Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
-                <div className="flex flex-col leading-snug text-wrap">
-                  <p className="text-[#f5f3f0] text-base sm:text-lg">Game History</p>
-                  <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">My game history</p>
-                </div>
-              </Link>
+<div className="grid grid-cols-2 gap-2 mt-4">
+  {/* Game History */}
+  <Link
+    to="/gamehistoryProfile"
+    className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+  >
+    <img src={bet} alt="Game History Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
+    <div className="flex flex-col flex-1 min-w-0">
+      <p className="text-[#f5f3f0] text-sm sm:text-base truncate">Game History</p>
+      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold whitespace-normal break-words">
+        My game history
+      </p>
+    </div>
+  </Link>
 
-              {/* Transaction */}
-              <Link
-                to="/transactionProfile"
-                className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-              >
-                <img src={transaction} alt="Transaction Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
-                <div className="flex flex-col leading-snug text-wrap">
-                  <p className="text-[#f5f3f0] text-base sm:text-lg">Transaction</p>
-                  <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">My transaction history</p>
-                </div>
-              </Link>
+  {/* Transaction */}
+  <Link
+    to="/transactionProfile"
+    className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+  >
+    <img src={transaction} alt="Transaction Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
+    <div className="flex flex-col flex-1 min-w-0">
+      <p className="text-[#f5f3f0] text-sm sm:text-base truncate">Transaction</p>
+      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold whitespace-normal break-words">
+        My transaction history
+      </p>
+    </div>
+  </Link>
 
-              {/* Deposit */}
-              <Link
-                to="/deposit-history"
-                className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-              >
-                <img src={DepositHistory} alt="Deposit Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
-                <div className="flex flex-col leading-snug text-wrap">
-                  <p className="text-[#f5f3f0] text-base sm:text-lg">Deposit</p>
-                  <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">My deposit history</p>
-                </div>
-              </Link>
+  {/* Deposit */}
+  <Link
+    to="/deposit-history"
+    className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+  >
+    <img src={DepositHistory} alt="Deposit Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
+    <div className="flex flex-col flex-1 min-w-0">
+      <p className="text-[#f5f3f0] text-sm sm:text-base truncate">Deposit</p>
+      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold whitespace-normal break-words">
+        My deposit history
+      </p>
+    </div>
+  </Link>
 
-              {/* Withdraw */}
-              <Link
-                to="/withdraw-history"
-                className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-              >
-                <img src={withdrawHistory} alt="Withdraw Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
-                <div className="flex flex-col leading-snug text-wrap">
-                  <p className="text-[#f5f3f0] text-base sm:text-lg">Withdraw</p>
-                  <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">My withdraw history</p>
-                </div>
-              </Link>
-            </div>
+  {/* Withdraw */}
+  <Link
+    to="/withdraw-history"
+    className="bg-[#333332] p-2 rounded-lg shadow-md flex items-center cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+  >
+    <img src={withdrawHistory} alt="Withdraw Icon" className="w-10 h-10 mr-3 flex-shrink-0" />
+    <div className="flex flex-col flex-1 min-w-0">
+      <p className="text-[#f5f3f0] text-sm sm:text-base truncate">Withdraw</p>
+      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold whitespace-normal break-words">
+        My withdraw history
+      </p>
+    </div>
+  </Link>
+</div>
 
 
 
 
+                
             <div className="bg-[#333332] p-4 rounded-lg shadow-md mt-4">
               <div className="space-y-6">
                 {/* Notification Button */}
@@ -326,7 +335,7 @@ function ProfilePage() {
                 </div>
               </div>
             </div>
-
+                
             <div className="bg-[#333332] text-[#a8a5a1] p-4 rounded-lg shadow-md mt-4">
               {/* Title aligned to the left */}
               <p className="text-lg font-normal mb-8 text-white text-left">
@@ -402,7 +411,7 @@ function ProfilePage() {
                 </Link>
               </div>
             </div>
-
+                
             <form className="space-y-4 md:space-y-6 mt-12 mb-14">
               <button
                 type="button"
@@ -429,12 +438,12 @@ function ProfilePage() {
                 <span className="text-white text-6xl font-bold">!</span>
               </div>
             </div>
-
+            
             {/* Modal Text */}
             <div className="text-center text-white text-2xl font-medium py-4">
               Do you want to log out?
             </div>
-
+            
             {/* Modal Buttons */}
             <div className="px-10 pb-6 pt-2 mt-4">
               <button
