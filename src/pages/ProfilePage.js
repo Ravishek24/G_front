@@ -197,63 +197,72 @@ function ProfilePage() {
             </Link>
 
 
-        <div className="grid grid-cols-2 gap-3 mt-4">
-  {/* Game History */}
-  <Link
-    to="/gamehistoryProfile"
-    className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[70px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-  >
-    <img src={bet} alt="Game History Icon" className="w-10 h-10 mr-4 flex-shrink-0" />
-    <div className="flex flex-col flex-1 min-w-0">
-      <p className="text-[#f5f3f0] text-sm sm:text-base font-bold">Game History</p>
-      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">
-        My game history
-      </p>
-    </div>
-  </Link>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              {/* Game History */}
+              <Link
+                to="/gamehistoryProfile"
+                className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[64px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+              >
+                <img src={bet} alt="Game History Icon" className="w-9 h-9 mr-3 flex-shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <p className="text-[#f5f3f0] text-xs sm:text-sm font-semibold truncate">
+                    Game History
+                  </p>
+                  <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium truncate">
+                    My game history
+                  </p>
+                </div>
+              </Link>
 
-  {/* Transaction */}
-  <Link
-    to="/transactionProfile"
-    className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[70px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-  >
-    <img src={transaction} alt="Transaction Icon" className="w-10 h-10 mr-4 flex-shrink-0" />
-    <div className="flex flex-col flex-1 min-w-0">
-      <p className="text-[#f5f3f0] text-sm sm:text-base font-bold">Transaction</p>
-      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">
-        My transaction history
-      </p>
-    </div>
-  </Link>
+              {/* Transaction */}
+              <Link
+                to="/transactionProfile"
+                className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[64px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+              >
+                <img src={transaction} alt="Transaction Icon" className="w-9 h-9 mr-3 flex-shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <p className="text-[#f5f3f0] text-xs sm:text-sm font-semibold truncate">
+                    Transaction
+                  </p>
+                  <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium truncate">
+                    My transaction history
+                  </p>
+                </div>
+              </Link>
 
-  {/* Deposit */}
-  <Link
-    to="/deposit-history"
-    className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[70px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-  >
-    <img src={DepositHistory} alt="Deposit Icon" className="w-10 h-10 mr-4 flex-shrink-0" />
-    <div className="flex flex-col flex-1 min-w-0">
-      <p className="text-[#f5f3f0] text-sm sm:text-base font-bold">Deposit</p>
-      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">
-        My deposit history
-      </p>
-    </div>
-  </Link>
+              {/* Deposit */}
+              <Link
+                to="/deposit-history"
+                className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[64px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+              >
+                <img src={DepositHistory} alt="Deposit Icon" className="w-9 h-9 mr-3 flex-shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <p className="text-[#f5f3f0] text-xs sm:text-sm font-semibold truncate">
+                    Deposit
+                  </p>
+                  <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium truncate">
+                    My deposit history
+                  </p>
+                </div>
+              </Link>
 
-  {/* Withdraw */}
-  <Link
-    to="/withdraw-history"
-    className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[70px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
-  >
-    <img src={withdrawHistory} alt="Withdraw Icon" className="w-10 h-10 mr-4 flex-shrink-0" />
-    <div className="flex flex-col flex-1 min-w-0">
-      <p className="text-[#f5f3f0] text-sm sm:text-base font-bold">Withdraw</p>
-      <p className="text-[#a8a5a1] text-xs sm:text-sm font-semibold">
-        My withdraw history
-      </p>
-    </div>
-  </Link>
-</div>
+              {/* Withdraw */}
+              <Link
+                to="/withdraw-history"
+                className="bg-[#333332] p-3 rounded-lg shadow-md flex items-center min-h-[64px] cursor-pointer hover:bg-[#3c3c3b] transition-colors"
+              >
+                <img src={withdrawHistory} alt="Withdraw Icon" className="w-9 h-9 mr-3 flex-shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <p className="text-[#f5f3f0] text-xs sm:text-sm font-semibold truncate">
+                    Withdraw
+                  </p>
+                  <p className="text-[#a8a5a1] text-[10px] sm:text-xs font-medium truncate">
+                    My withdraw history
+                  </p>
+                </div>
+              </Link>
+            </div>
+
 
 
 
