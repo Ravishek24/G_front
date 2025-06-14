@@ -297,8 +297,8 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-[#333332] w-full">
-      <div className="w-full md:max-w-[400px] mx-auto login-container">
+    <div className="flex flex-col items-center  bg-[#333332] w-full">
+      <div className="w-full md:max-w-[700px] mx-auto login-container">
         <Header />
         <div className="text-left mb-2 h-auto w-full px-2 sm:px-4 mt-8">
           <h1 className="text-lg font-bold text-white mb-2">Log in</h1>
